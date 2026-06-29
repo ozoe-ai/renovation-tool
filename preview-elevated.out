@@ -1,0 +1,97 @@
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3008
+- Network:       http://192.168.1.124:3008
+
+✓ Starting...
+✓ Ready in 27.2s
+○ Compiling / ...
+✓ Finished writing to filesystem cache in 16.0s
+✓ Finished writing to filesystem cache in 18.5s
+ GET / 200 in 3.5min (compile: 3.1min, render: 26.6s)
+ GET / 200 in 3.8s (compile: 2.8s, render: 939ms)
+ GET / 200 in 2.8s (compile: 700ms, render: 2.1s)
+✓ Compiled in 1936ms
+ GET / 200 in 10.6s (compile: 7.5s, render: 3.1s)
+✓ Compiled in 10.1s
+✓ Compiled in 1500ms
+✓ Compiled in 1246ms
+✓ Compiled in 2.9s
+✓ Compiled in 12.6s
+✓ Compiled in 3.4s
+✓ Compiled in 17.9s
+✓ Compiled in 609ms
+ GET / 200 in 1419ms (compile: 739ms, render: 680ms)
+ GET / 200 in 1573ms (compile: 636ms, render: 937ms)
+ GET / 200 in 5.4s (compile: 2.7s, render: 2.7s)
+ GET / 200 in 2.2s (compile: 1058ms, render: 1182ms)
+✓ Compiled in 1366ms
+✓ Compiled in 316ms
+✓ Compiled in 1136ms
+✓ Compiled in 3.6s
+✓ Compiled in 1201ms
+✓ Compiled in 1732ms
+✓ Compiled in 1533ms
+✓ Compiled in 986ms
+✓ Compiled in 877ms
+✓ Compiled in 369ms
+ GET / 200 in 3.9s (compile: 1312ms, render: 2.6s)
+✓ Compiled in 1186ms
+ GET / 200 in 1474ms (compile: 489ms, render: 985ms)
+ GET / 200 in 2.7s (compile: 124ms, render: 2.6s)
+ GET / 200 in 4.0s (compile: 462ms, render: 3.5s)
+ GET / 200 in 2.9s (compile: 374ms, render: 2.5s)
+ GET / 200 in 1599ms (compile: 281ms, render: 1318ms)
+ GET / 200 in 1670ms (compile: 575ms, render: 1095ms)
+ GET / 200 in 977ms (compile: 49ms, render: 928ms)
+ GET / 200 in 1169ms (compile: 378ms, render: 791ms)
+ GET / 200 in 1080ms (compile: 327ms, render: 753ms)
+ GET / 200 in 1082ms (compile: 159ms, render: 923ms)
+ GET / 200 in 1583ms (compile: 31ms, render: 1553ms)
+ GET / 200 in 1598ms (compile: 123ms, render: 1475ms)
+ GET / 200 in 1426ms (compile: 33ms, render: 1393ms)
+ GET / 200 in 1477ms (compile: 168ms, render: 1309ms)
+ GET / 200 in 885ms (compile: 101ms, render: 784ms)
+ GET / 200 in 1080ms (compile: 674ms, render: 406ms)
+✓ Compiled in 1522ms
+✓ Compiled in 414ms
+✓ Compiled in 297ms
+✓ Compiled in 501ms
+✓ Compiled in 857ms
+ GET / 200 in 10.9s (compile: 5.4s, render: 5.5s)
+○ Compiling /api/export-quote ...
+ POST /api/export-quote 500 in 13.8s (compile: 8.8s, render: 5.0s)
+ POST /api/export-quote 500 in 329ms (compile: 45ms, render: 284ms)
+ GET / 200 in 465ms (compile: 157ms, render: 308ms)
+ POST /api/export-quote 500 in 1012ms (compile: 221ms, render: 792ms)
+ POST /api/export-quote 500 in 209ms (compile: 22ms, render: 186ms)
+✓ Compiled in 982ms
+ POST /api/export-quote 500 in 3.0s (compile: 2.1s, render: 888ms)
+✓ Finished writing to filesystem cache in 16.1s
+ POST /api/export-quote 500 in 1905ms (compile: 1288ms, render: 617ms)
+✓ Compiled in 997ms
+ GET / 200 in 6.6s (compile: 3.3s, render: 3.3s)
+ POST /api/export-quote 500 in 6.1s (compile: 5.4s, render: 779ms)
+✓ Compiled in 3s
+ GET / 200 in 1164ms (compile: 457ms, render: 708ms)
+  Reload env: .env.local
+ GET / 200 in 1098ms (compile: 540ms, render: 558ms)
+ GET / 200 in 197ms (compile: 48ms, render: 149ms)
+ POST /api/export-quote 200 in 5.9s (compile: 361ms, render: 5.6s)
+ POST /api/export-quote 200 in 6.1s (compile: 183ms, render: 5.9s)
+ GET / 200 in 1094ms (compile: 149ms, render: 945ms)
+ POST /api/export-quote 200 in 5.3s (compile: 38ms, render: 5.2s)
+ GET / 200 in 3.1s (compile: 808ms, render: 2.3s)
+ GET / 200 in 3.3s (compile: 1506ms, render: 1827ms)
+ GET / 200 in 5.3s (compile: 1690ms, render: 3.6s)
+ GET / 200 in 1106ms (compile: 353ms, render: 753ms)
+ POST /api/export-quote 200 in 5.4s (compile: 192ms, render: 5.2s)
+ POST /api/export-quote 500 in 2.5s (compile: 239ms, render: 2.2s)
+ POST /api/export-quote 500 in 2.5s (compile: 108ms, render: 2.4s)
+ POST /api/export-quote 500 in 2.7s (compile: 175ms, render: 2.6s)
+ POST /api/export-quote 200 in 10.8s (compile: 300ms, render: 10.5s)
+ POST /api/export-quote 200 in 12.1s (compile: 1306ms, render: 10.8s)
+ POST /api/export-quote 200 in 10.0s (compile: 225ms, render: 9.7s)
+ POST /api/export-quote 200 in 10.6s (compile: 311ms, render: 10.2s)
+ POST /api/export-quote 200 in 11.7s (compile: 1388ms, render: 10.3s)
+ POST /api/export-quote 200 in 9.0s (compile: 130ms, render: 8.9s)
+ GET / 200 in 1698ms (compile: 415ms, render: 1283ms)
