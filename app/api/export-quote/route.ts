@@ -3,6 +3,9 @@ import type { AppState } from "@/lib/types";
 
 export const runtime = "nodejs";
 
+const DEFAULT_GAS_WEB_APP_URL =
+  "https://script.google.com/macros/s/AKfycbzXNXU3VTgc9ZXGhcWnva40xJpNYaUMTM2C9veDKCs3PkRqqQhHI16_2CEiWQnoqg/exec";
+
 export async function POST(request: NextRequest) {
   try {
     const state = (await request.json()) as AppState;
@@ -11,10 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid quote payload." }, { status: 400 });
     }
 
-    const gasUrl = process.env.GAS_WEB_APP_URL;
-    if (!gasUrl) {
-      return NextResponse.json({ error: "GAS_WEB_APP_URL is not configured." }, { status: 500 });
-    }
+    const gasUrl = process.env.GAS_WEB_APP_URL || DEFAULT_GAS_WEB_APP_URL;
 
     const response = await fetch(gasUrl, {
       method: "POST",
