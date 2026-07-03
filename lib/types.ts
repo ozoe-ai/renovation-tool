@@ -38,6 +38,8 @@ export interface SelectedWorkItem {
   unit: string;
   unitPrice: number;
   lineSubtotal: number; // qty * unitPrice
+  note?: string;
+  selections?: Array<{ label: string; value: string }>;
   crossTotalArea?: number;
   crossCeilingHeight?: number;
   crossScope?: string;

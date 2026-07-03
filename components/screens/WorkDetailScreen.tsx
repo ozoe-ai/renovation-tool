@@ -238,6 +238,7 @@ export function WorkDetailScreen() {
   const [qty, setQty] = useState(item?.qty ?? 1);
   const [unit, setUnit] = useState(item?.unit ?? "式");
   const [unitPrice, setUnitPrice] = useState(item?.unitPrice ?? 0);
+  const [itemNote, setItemNote] = useState(item?.note ?? "");
   const isZentaiCross = masterDef?.id.includes("zentai_cross") ?? false;
   const crossTargetRooms = useMemo<CrossTargetRoom[]>(() => {
     const rooms = state.generatedRooms
@@ -1287,6 +1288,7 @@ export function WorkDetailScreen() {
       unit,
       unitPrice,
       lineSubtotal,
+      note: itemNote.trim(),
       crossTotalArea: showCrossCalculator ? crossCalculation.totalArea : undefined,
       crossCeilingHeight: showCrossCalculator ? crossCeilingHeight : undefined,
       crossScope: showCrossCalculator ? crossScope : undefined,
@@ -5459,6 +5461,17 @@ export function WorkDetailScreen() {
           </div>
         </div>
         )}
+
+        <div>
+          <label className="text-sm font-medium text-foreground block mb-1.5">備考</label>
+          <textarea
+            value={itemNote}
+            onChange={(e) => setItemNote(e.target.value)}
+            placeholder="※備考"
+            rows={3}
+            className="w-full border border-input rounded-lg px-3 py-2.5 text-sm bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-y"
+          />
+        </div>
 
         {/* Actions */}
         <div className="flex gap-3 pt-2">
