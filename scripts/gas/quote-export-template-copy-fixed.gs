@@ -55,7 +55,7 @@ function createEstimateSpreadsheet_(payload) {
   spreadsheet = copyTemplateSpreadsheet_(fileName);
   sheet = spreadsheet.getSheets()[0];
 
-  writeToOriginalTemplate_(sheet, customerName, honorific, projectName, groupedItems, items);
+  writeToOriginalTemplate_(sheet, customerName, honorific, projectName, groupedItems, items, payload);
 
   return {
     spreadsheetId: spreadsheet.getId(),
@@ -77,9 +77,9 @@ function copyTemplateSpreadsheet_(fileName) {
   return SpreadsheetApp.openById(copiedFile.getId());
 }
 
-function writeToOriginalTemplate_(sheet, customerName, honorific, projectName, groupedItems, allItems) {
+function writeToOriginalTemplate_(sheet, customerName, honorific, projectName, groupedItems, allItems, payload) {
   var startRow = 9;
-  var total = calculateTotal_(allItems);
+  var total = estimateTotal_(payload, allItems);
   var row = startRow;
   var i;
   var j;
@@ -119,6 +119,12 @@ function writeToOriginalTemplate_(sheet, customerName, honorific, projectName, g
   }
 
   applyOriginalStyleRules_(sheet, row - 1);
+  writeEstimateAmount_(sheet, total);
+}
+
+function estimateTotal_(payload, items) {
+  var amount = toNumber_(payload.estimateAmount || payload.totalAmount || payload.quoteTotal || payload.total);
+  return amount || calculateTotal_(items);
 }
 
 function clearEstimateRows_(sheet, startRow) {
@@ -149,6 +155,13 @@ function applyOriginalStyleRules_(sheet, lastRow) {
   sheet.getRange('A1:A' + last).setWrapStrategy(SpreadsheetApp.WrapStrategy.OVERFLOW);
   sheet.getRange('B3').setHorizontalAlignment('center');
   sheet.getRange('D9:F' + Math.max(lastRow, 9)).setNumberFormat('#,##0');
+}
+
+function writeEstimateAmount_(sheet, total) {
+  Logger.log('estimate total=' + total);
+  Logger.log('target sheet=' + sheet.getName());
+  sheet.getRange('BC6').setValue(total);
+  SpreadsheetApp.flush();
 }
 
 function setupHonorificDropdown_(sheet) {

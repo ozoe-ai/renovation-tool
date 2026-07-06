@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { useApp } from "@/lib/WizardContext";
+import { formatItemSelectionSummary, normalizeRoomLabel } from "@/lib/item-display";
 
 export function FinalConfirmScreen() {
   const {
@@ -99,8 +100,9 @@ export function FinalConfirmScreen() {
   // Group items by room
   const grouped = state.selectedWorkItems.reduce<Record<string, typeof state.selectedWorkItems>>(
     (acc, item) => {
-      if (!acc[item.roomLabel]) acc[item.roomLabel] = [];
-      acc[item.roomLabel].push(item);
+      const roomLabel = normalizeRoomLabel(item.roomLabel);
+      if (!acc[roomLabel]) acc[roomLabel] = [];
+      acc[roomLabel].push(item);
       return acc;
     },
     {}
@@ -216,10 +218,14 @@ export function FinalConfirmScreen() {
                   const titleIdx = sameTitle.findIndex((i) => (i.instanceId || i.workItemId) === (item.instanceId || item.workItemId));
                   const displayNumber = sameTitle.length > 1 ? (numberMap[titleIdx + 1] || `(${titleIdx + 1})`) : "";
                   const displayTitle = `${item.title}${displayNumber}`;
+                  const selectionSummary = formatItemSelectionSummary(item);
 
                   return (
-                    <div key={item.instanceId || item.workItemId} className="flex justify-between text-sm py-1">
-                      <span className="text-foreground">{displayTitle}（{item.selectedOptionLabel}）</span>
+                    <div key={item.instanceId || item.workItemId} className="flex justify-between gap-3 text-sm py-1">
+                      <span className="text-foreground whitespace-pre-line">
+                        {displayTitle}
+                        {selectionSummary && `\n${selectionSummary}`}
+                      </span>
                       <span className="text-foreground font-medium">{"\u00A5"}{item.lineSubtotal.toLocaleString()}</span>
                     </div>
                   );

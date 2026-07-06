@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useApp } from "@/lib/WizardContext";
 import { calcLoan } from "@/lib/store";
+import { formatItemSelectionSummary, normalizeRoomLabel } from "@/lib/item-display";
 import { X } from "lucide-react";
 
 // ========== Content Panel ==========
@@ -10,8 +11,9 @@ function ContentPanel({ onClose }: { onClose: () => void }) {
   const { state, removeWorkItem, setStep, selectRoom } = useApp();
   const grouped = state.selectedWorkItems.reduce<Record<string, typeof state.selectedWorkItems>>(
     (acc, item) => {
-      if (!acc[item.roomLabel]) acc[item.roomLabel] = [];
-      acc[item.roomLabel].push(item);
+      const roomLabel = normalizeRoomLabel(item.roomLabel);
+      if (!acc[roomLabel]) acc[roomLabel] = [];
+      acc[roomLabel].push(item);
       return acc;
     },
     {}
@@ -45,13 +47,16 @@ function ContentPanel({ onClose }: { onClose: () => void }) {
                 const displayNumber = sameTitle.length > 1 ? (numberMap[titleIdx + 1] || `(${titleIdx + 1})`) : "";
                 const displayTitle = `${item.title}${displayNumber}`;
                 const deleteId = item.instanceId || item.workItemId;
+                const selectionSummary = formatItemSelectionSummary(item);
 
                 return (
                   <div key={item.instanceId || item.workItemId} className="flex items-center justify-between py-1.5 border-b border-border">
                     <div className="flex-1 min-w-0">
                       <span className="text-sm text-foreground">{displayTitle}</span>
-                      <span className="text-xs text-muted-foreground ml-2">
-                        {item.selectedOptionLabel} / {item.qty}{item.unit} / {"\u00A5"}{item.lineSubtotal.toLocaleString()}
+                      <span className="text-xs text-muted-foreground ml-2 whitespace-pre-line">
+                        {selectionSummary}
+                        {selectionSummary && " / "}
+                        {"\u00A5"}{item.lineSubtotal.toLocaleString()}
                       </span>
                     </div>
                     <button

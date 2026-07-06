@@ -1,23 +1,8 @@
-﻿import { NextRequest, NextResponse } from "next/server";
-import type { AppState } from "@/lib/types";
+import type { SelectedWorkItem } from "./types";
 
-export const runtime = "nodejs";
-
-const DEFAULT_GAS_WEB_APP_URL =
-  "https://script.google.com/macros/s/AKfycbzXNXU3VTgc9ZXGhcWnva40xJpNYaUMTM2C9veDKCs3PkRqqQhHI16_2CEiWQnoqg/exec";
-
-type GasSelection = {
+type DisplaySelection = {
   label: string;
   value: string;
-};
-
-type GasItemPayload = Record<string, unknown> & {
-  category: string;
-  itemName: string;
-  selections: GasSelection[];
-  note: string;
-  title: string;
-  selectedOptionLabel: string;
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -27,9 +12,7 @@ const FIELD_LABELS: Record<string, string> = {
   storageDepth: "奥行",
   storageShape: "形状",
   storageMirror: "鏡",
-  lightColor: "色",
-  lightDiameter: "径",
-  lightBodyColor: "本体色",
+  kitchenExisting: "既存仕様",
   kitchenShape: "形状",
   kitchenDepth: "奥行",
   kitchenWidth: "サイズ",
@@ -41,8 +24,10 @@ const FIELD_LABELS: Record<string, string> = {
   kitchenDishwasherAfter: "食洗機",
   kitchenWorktop: "ワークトップ",
   kitchenSink: "シンク",
-  kitchenExisting: "既存仕様",
   kitchenEndPanel: "エンドパネル",
+  lightColor: "色",
+  lightDiameter: "径",
+  lightBodyColor: "本体色",
   toiletDrainage: "排水",
   toiletFloorDrainMm: "排水芯",
   roukaStorageSpec: "仕様",
@@ -139,6 +124,10 @@ const CALCULATION_FIELD_PATTERNS = [
   "amount",
 ];
 
+export function normalizeRoomLabel(label: string) {
+  return label === "全体項目（必須で入れる）" ? "全体項目" : label;
+}
+
 function isSelectionField(key: string, value: unknown) {
   const lower = key.toLowerCase();
   if (EXCLUDED_SELECTION_FIELDS.has(key)) return false;
@@ -153,19 +142,16 @@ function isSelectionField(key: string, value: unknown) {
   return true;
 }
 
-function selectionValue(value: unknown) {
+export function translateSelectionValue(value: unknown) {
   if (typeof value === "boolean") return value ? "有" : "";
-  return translateSelectionValue(String(value));
-}
-
-function translateSelectionValue(value: string) {
-  const commaParts = value.split(",").map((part) => part.trim()).filter(Boolean);
+  const text = String(value);
+  const commaParts = text.split(",").map((part) => part.trim()).filter(Boolean);
   if (commaParts.length > 1) return commaParts.map(translateSelectionValue).filter(Boolean).join("・");
 
-  const mappedValue = VALUE_LABELS[value.toLowerCase()];
+  const mappedValue = VALUE_LABELS[text.toLowerCase()];
   if (mappedValue) return mappedValue;
 
-  const translatedValue = value.replace(/\b[A-Z]+(?:_[A-Z]+)*(?:_\d+)?\b/g, (match) => {
+  const translatedValue = text.replace(/\b[A-Z]+(?:_[A-Z]+)*(?:_\d+)?\b/g, (match) => {
     return ROOM_VALUE_LABELS[match] || match;
   });
   return formatRoomListValue(translatedValue);
@@ -181,13 +167,13 @@ function isRoomListValue(value: string) {
   return value.includes("・") && value.split("・").some((part) => ROOM_LIST_LABELS.has(part.trim()));
 }
 
-function formatNote(note?: string) {
+export function formatNote(note?: string) {
   const trimmed = note?.trim() || "";
   return trimmed ? `※備考：${trimmed}` : "";
 }
 
-function buildSelections(item: AppState["selectedWorkItems"][number]) {
-  const selections: GasSelection[] = [];
+export function buildItemSelections(item: SelectedWorkItem) {
+  const selections: DisplaySelection[] = [];
   const usedValues = new Set<string>();
   const translatedOption = translateSelectionValue(item.selectedOption);
   const primaryOption =
@@ -202,7 +188,7 @@ function buildSelections(item: AppState["selectedWorkItems"][number]) {
 
   Object.entries(item).forEach(([key, value]) => {
     if (!isSelectionField(key, value)) return;
-    const valueText = selectionValue(value);
+    const valueText = translateSelectionValue(value);
     if (!valueText || usedValues.has(valueText)) return;
     selections.push({ label: FIELD_LABELS[key] || key, value: valueText });
     usedValues.add(valueText);
@@ -211,9 +197,12 @@ function buildSelections(item: AppState["selectedWorkItems"][number]) {
   return selections;
 }
 
-function formatSpreadsheetItemName(itemName: string, selections: GasSelection[], note: string) {
-  const parts = [itemName, ...selections.map((selection) => selection.value).filter(Boolean)];
+export function formatItemDisplayName(item: SelectedWorkItem, options?: { includeNote?: boolean }) {
+  const selections = buildItemSelections(item);
+  const parts = [item.title, ...selections.map((selection) => selection.value).filter(Boolean)];
+  const note = options?.includeNote === false ? "" : formatNote(item.note);
   if (note) parts.push(note);
+
   const roomListIndex = parts.findIndex(isRoomListValue);
   if (roomListIndex > 0) {
     const beforeRoomList = parts.slice(0, roomListIndex).join("　");
@@ -222,6 +211,14 @@ function formatSpreadsheetItemName(itemName: string, selections: GasSelection[],
     return wrapLongDisplayText([beforeRoomList, roomList, afterRoomList].filter(Boolean).join("\n"));
   }
   return wrapLongDisplayText(parts.join("　"));
+}
+
+export function formatItemSelectionSummary(item: SelectedWorkItem) {
+  const details = buildItemSelections(item).map((selection) => selection.value);
+  details.push(`数量${item.qty}`);
+  details.push(`単位 ${item.unit || ""}`);
+  details.push(`単価 ¥${Number(item.unitPrice || 0).toLocaleString()}`);
+  return details.filter(Boolean).join("\n");
 }
 
 function wrapLongDisplayText(text: string) {
@@ -252,95 +249,4 @@ function wrapDisplayLine(line: string) {
 
   if (current) lines.push(current);
   return lines;
-}
-
-function dedupeKey(item: AppState["selectedWorkItems"][number]) {
-  return item.instanceId || item.workItemId || `${item.roomKey}:${item.title}`;
-}
-
-function normalizeRoomLabel(label: string) {
-  return label === "全体項目（必須で入れる）" ? "全体項目" : label;
-}
-
-function calculateTotal(state: AppState) {
-  return state.selectedWorkItems.reduce((sum, item) => sum + (Number(item.qty) || 0) * (Number(item.unitPrice) || 0), 0);
-}
-
-function buildGasItems(state: AppState) {
-  const seen = new Set<string>();
-
-  return state.selectedWorkItems.reduce<GasItemPayload[]>((items, item) => {
-    const key = dedupeKey(item);
-    if (seen.has(key)) return items;
-    seen.add(key);
-
-    const selections = buildSelections(item);
-    const note = formatNote(item.note);
-    const title = formatSpreadsheetItemName(item.title, selections, note);
-
-    items.push({
-      ...item,
-      category: normalizeRoomLabel(item.roomLabel),
-      itemName: item.title,
-      selections,
-      note,
-      title,
-      name: title,
-      selectedOptionLabel: "",
-    });
-
-    return items;
-  }, []);
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const state = (await request.json()) as AppState;
-
-    if (!state || !Array.isArray(state.selectedWorkItems)) {
-      return NextResponse.json({ error: "Invalid quote payload." }, { status: 400 });
-    }
-
-    const gasUrl = process.env.GAS_WEB_APP_URL || DEFAULT_GAS_WEB_APP_URL;
-
-    const gasItems = buildGasItems(state);
-    const totalAmount = calculateTotal(state);
-    const response = await fetch(gasUrl, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        projectName: state.projectName || "",
-        customerName: state.customerName || "",
-        honorific: "\u69d8",
-        discount: 0,
-        total: totalAmount,
-        totalAmount,
-        quoteTotal: totalAmount,
-        estimateAmountCell: "BC6",
-        estimateAmount: totalAmount,
-        items: gasItems,
-        apiSecret: process.env.GAS_API_SECRET || "",
-      }),
-    });
-
-    const result = await response.json().catch(() => null);
-    const succeeded = result?.ok === true || result?.success === true;
-    if (!response.ok || !succeeded) {
-      return NextResponse.json(
-        { error: result?.error || result?.message || "Failed to export quote." },
-        { status: response.ok ? 500 : response.status }
-      );
-    }
-
-    return NextResponse.json({
-      ok: true,
-      spreadsheetId: result.spreadsheetId,
-      spreadsheetUrl: result.spreadsheetUrl || result.url,
-      fileName: result.fileName,
-    });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to export quote.";
-    console.error("[export-quote]", error);
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
 }

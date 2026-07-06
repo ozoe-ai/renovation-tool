@@ -1,5 +1,6 @@
 ﻿import { createSign } from "crypto";
 import type { AppState, SelectedWorkItem } from "./types";
+import { formatItemDisplayName, normalizeRoomLabel } from "./item-display";
 
 const OUTPUT_FOLDER_ID = "1oUKD65onJYeZWqfoeTdWuEhzr-3TE216";
 const DRIVE_SCOPE = "https://www.googleapis.com/auth/drive";
@@ -145,7 +146,7 @@ function calculateTotal(state: AppState) {
 }
 
 function itemName(item: SelectedWorkItem) {
-  return item.selectedOptionLabel ? `${item.title}\uff08${item.selectedOptionLabel}\uff09` : item.title;
+  return formatItemDisplayName(item);
 }
 
 function optionalText(item: SelectedWorkItem, keys: string[]) {
@@ -167,11 +168,12 @@ function optionalNumber(item: SelectedWorkItem, keys: string[]) {
 
 function groupItems(items: SelectedWorkItem[]) {
   return items.reduce<Array<{ roomLabel: string; items: SelectedWorkItem[] }>>((groups, item) => {
-    const existing = groups.find((group) => group.roomLabel === item.roomLabel);
+    const roomLabel = normalizeRoomLabel(item.roomLabel);
+    const existing = groups.find((group) => group.roomLabel === roomLabel);
     if (existing) {
       existing.items.push(item);
     } else {
-      groups.push({ roomLabel: item.roomLabel, items: [item] });
+      groups.push({ roomLabel, items: [item] });
     }
     return groups;
   }, []);

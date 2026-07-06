@@ -4,6 +4,7 @@ import React from "react";
 import { useApp } from "@/lib/WizardContext";
 import { getWorkItemsForRoom } from "@/lib/config";
 import { SelectedWorkItem } from "@/lib/types";
+import { formatItemSelectionSummary, normalizeRoomLabel } from "@/lib/item-display";
 import { ChevronRight } from "lucide-react";
 
 const instanceSuffix = (index: number) => {
@@ -42,7 +43,7 @@ export function RoomWorkScreen() {
     return {
       workItemId: itemId,
       roomKey: selectedRoom.roomKey,
-      roomLabel: selectedRoom.label,
+      roomLabel: normalizeRoomLabel(selectedRoom.label),
       title: def.title,
       selectedOption: def.options[0]?.value ?? "",
       selectedOptionLabel: def.options[0]?.label ?? "",
@@ -102,7 +103,7 @@ export function RoomWorkScreen() {
       <div className="bg-card border-b border-border px-4 py-3">
         <div className="flex items-center justify-between max-w-3xl mx-auto">
           <h1 className="text-lg font-bold text-foreground">
-            {selectedRoom ? selectedRoom.label : "部屋を選択"}
+            {selectedRoom ? normalizeRoomLabel(selectedRoom.label) : "部屋を選択"}
           </h1>
           <div className="flex gap-2">
             <button
@@ -154,7 +155,7 @@ export function RoomWorkScreen() {
                       : "text-foreground hover:bg-accent"
                   }`}
                 >
-                  <span className="flex-1 text-left">{room.label}</span>
+                  <span className="flex-1 text-left">{normalizeRoomLabel(room.label)}</span>
                   {roomSelectedCount > 0 && (
                     <span className={`text-xs rounded-full px-1.5 py-0.5 ${
                       isActive ? "bg-primary-foreground/20 text-primary-foreground" : "bg-muted text-muted-foreground"
@@ -187,6 +188,7 @@ export function RoomWorkScreen() {
                     ? `${masterItem.title}${instanceSuffix(instance.instanceNumber ?? index + 1)}`
                     : masterItem.title;
                   const rowCount = instance ? 1 : 0;
+                  const selectionSummary = instance ? formatItemSelectionSummary(instance) : "";
 
                   return (
                   <div
@@ -201,8 +203,8 @@ export function RoomWorkScreen() {
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-foreground">{displayTitle}</span>
                       {instance && (
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {instance.selectedOptionLabel} / {instance.qty}{instance.unit}
+                        <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line">
+                          {selectionSummary}
                           {!hideRowPrice && <> / {"\u00A5"}{instance.lineSubtotal.toLocaleString()}</>}
                         </p>
                       )}

@@ -148,7 +148,7 @@ const TOILET_ITEMS: WorkItemDef[] = [
 ];
 
 export const ROOM_TYPES: RoomTypeDef[] = [
-  { roomType: "ZENTAI", label: "全体項目（必須で入れる）", workItems: ZENTAI_ITEMS },
+  { roomType: "ZENTAI", label: "全体項目", workItems: ZENTAI_ITEMS },
   { roomType: "GENKAN", label: "玄関", workItems: GENKAN_ITEMS },
   { roomType: "ROUKA", label: "廊下", workItems: ROUKA_ITEMS },
   { roomType: "YOSHITSU", label: "洋室", workItems: YOSHITSU_ITEMS },
@@ -179,7 +179,7 @@ export function generateStairLabels(numStairs: number): string[] {
 
 export function generateRooms(settings: RoomCountSettings): RoomInstance[] {
   const rooms: RoomInstance[] = [];
-  rooms.push({ roomKey: "ZENTAI", roomType: "ZENTAI", label: "全体項目（必須で入れる）" });
+  rooms.push({ roomKey: "ZENTAI", roomType: "ZENTAI", label: "全体項目" });
 
   for (let i = 1; i <= settings.numGenkan; i++) {
     rooms.push({ roomKey: settings.numGenkan === 1 ? "GENKAN" : `GENKAN_${i}`, roomType: "GENKAN", label: settings.numGenkan === 1 ? "玄関" : `玄関${i}` });
