@@ -12,8 +12,8 @@ export function FinalConfirmScreen() {
     getSumSellTax,
     setStep,
     setProjectName,
-    setCustomerName,
     setMultiplier,
+    saveProject,
   } = useApp();
 
   const [errors, setErrors] = useState<string[]>([]);
@@ -22,9 +22,7 @@ export function FinalConfirmScreen() {
   const [exportError, setExportError] = useState<string | null>(null);
   const [spreadsheetUrl, setSpreadsheetUrl] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
-  const nameRef = useRef<HTMLInputElement>(null);
   const projectRef = useRef<HTMLInputElement>(null);
-  const multiplierRef = useRef<HTMLInputElement>(null);
 
   const cost = getSumCost();
   const sell = getSumSell();
@@ -32,13 +30,10 @@ export function FinalConfirmScreen() {
 
   // Local editable fields for inline fix
   const [localProject, setLocalProject] = useState(state.projectName);
-  const [localCustomer, setLocalCustomer] = useState(state.customerName);
   const [localMultiplier, setLocalMultiplier] = useState(state.multiplier?.toString() ?? "");
 
   const validate = (): boolean => {
     const errs: string[] = [];
-    if (!localMultiplier || parseFloat(localMultiplier) <= 0) errs.push("multiplier");
-    if (!localCustomer.trim()) errs.push("customerName");
     setErrors(errs);
     return errs.length === 0;
   };
@@ -50,10 +45,6 @@ export function FinalConfirmScreen() {
       // Focus first empty field
       if (errors.includes("projectName") && projectRef.current) {
         projectRef.current.focus();
-      } else if (errors.includes("customerName") && nameRef.current) {
-        nameRef.current.focus();
-      } else if (errors.includes("multiplier") && multiplierRef.current) {
-        multiplierRef.current.focus();
       }
     }
   }, [errors]);
@@ -61,9 +52,8 @@ export function FinalConfirmScreen() {
   const handleConfirm = async () => {
     // Save inline edits
     setProjectName(localProject);
-    setCustomerName(localCustomer);
     const m = parseFloat(localMultiplier);
-    if (!isNaN(m) && m > 0) setMultiplier(m);
+    setMultiplier(!isNaN(m) && m > 0 ? m : null);
 
     if (!validate()) return;
     setExportError(null);
@@ -73,8 +63,8 @@ export function FinalConfirmScreen() {
       const exportState = {
         ...state,
         projectName: localProject.trim(),
-        customerName: localCustomer.trim(),
-        multiplier: !isNaN(m) && m > 0 ? m : state.multiplier,
+        customerName: "",
+        multiplier: !isNaN(m) && m > 0 ? m : null,
       };
       const response = await fetch("/api/export-quote", {
         method: "POST",
@@ -89,6 +79,7 @@ export function FinalConfirmScreen() {
       }
 
       setSpreadsheetUrl(result?.spreadsheetUrl);
+      saveProject("completed", exportState);
       setConfirmed(true);
     } catch {
       setExportError("見積書の作成に失敗しました。時間をおいて再度お試しください。");
@@ -145,7 +136,7 @@ export function FinalConfirmScreen() {
         {errors.length > 0 && (
           <div ref={errorRef} className="rounded-lg bg-destructive/10 border border-destructive/30 p-4">
             <p className="text-sm font-semibold text-destructive">
-              利益率（掛け率）または 案件名＋顧客名 が入力されていません
+              案件名が入力されていません
             </p>
           </div>
         )}
@@ -158,9 +149,9 @@ export function FinalConfirmScreen() {
 
         {/* Editable required fields */}
         <div className="space-y-3 border border-border rounded-lg p-4">
-          <h2 className="text-sm font-bold text-foreground">必須項目</h2>
+          <h2 className="text-sm font-bold text-foreground">案件情報</h2>
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1">案件名 *</label>
+            <label className="text-xs font-medium text-foreground block mb-1">案件名</label>
             <input
               ref={projectRef}
               type="text"
@@ -172,29 +163,14 @@ export function FinalConfirmScreen() {
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-foreground block mb-1">顧客名 *</label>
+            <label className="text-xs font-medium text-foreground block mb-1">掛け率</label>
             <input
-              ref={nameRef}
-              type="text"
-              value={localCustomer}
-              onChange={(e) => setLocalCustomer(e.target.value)}
-              className={`w-full border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring ${
-                errors.includes("customerName") ? "border-destructive" : "border-input"
-              }`}
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-foreground block mb-1">掛け率 *</label>
-            <input
-              ref={multiplierRef}
               type="number"
               step="0.01"
               value={localMultiplier}
               onChange={(e) => setLocalMultiplier(e.target.value)}
               placeholder="1.30"
-              className={`w-full border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring ${
-                errors.includes("multiplier") ? "border-destructive" : "border-input"
-              }`}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring border-input"
             />
           </div>
         </div>

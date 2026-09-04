@@ -8,7 +8,7 @@ import React from "react";
 // ============================================================
 
 interface TateguDetailProps {
-  spec: string; // 片開き / 片引き / 2枚引き違い戸 / 2枚片引き / 3枚引き違い戸 / 3枚片引き
+  spec: string; // 片開き / 片引き / アウトセット片引き / 2枚引き違い戸 / 2枚片引き / 3枚引き違い戸 / 3枚片引き
   // --- 共通 ---
   dansa: string;
   setDansa: (v: string) => void;
@@ -16,6 +16,16 @@ interface TateguDetailProps {
   setDansaKubun: (v: string) => void;
   dansaCustomMm: number | undefined;
   setDansaCustomMm: (v: number | undefined) => void;
+  kagi?: string;
+  setKagi?: (v: string) => void;
+  floorMikiri?: string;
+  setFloorMikiri?: (v: string) => void;
+  floorMikiriType?: string;
+  setFloorMikiriType?: (v: string) => void;
+  floorMikiriSize?: string;
+  setFloorMikiriSize?: (v: string) => void;
+  floorMikiriImage?: string;
+  setFloorMikiriImage?: (v: string) => void;
   // --- 片開き ---
   katabiraki_w: string; setKatabiraki_w: (v: string) => void;
   katabiraki_h: string; setKatabiraki_h: (v: string) => void;
@@ -74,6 +84,11 @@ interface TateguDetailProps {
   nimai_kata_h_custom?: number | undefined; setNimai_kata_h_custom?: (v: number | undefined) => void;
   nimai_kata_hikite?: string; setNimai_kata_hikite?: (v: string) => void;
   nimai_kata_hikite_photo?: string; setNimai_kata_hikite_photo?: (v: string) => void;
+  // --- アウトセット片引き ---
+  outset_kagi?: string; setOutset_kagi?: (v: string) => void;
+  outset_hikite?: string; setOutset_hikite?: (v: string) => void;
+  outset_rail_width?: string; setOutset_rail_width?: (v: string) => void;
+  outset_ch?: string; setOutset_ch?: (v: string) => void;
 }
 
 // 共通UIパーツ
@@ -111,6 +126,7 @@ const METHOD_IMAGE: Record<string, string> = {
   yguruma: "/images/吊元/Ytoguruma.png",
 };
 const HIKITE_IMAGE = "/images/吊元/hikidoturimoto.png";
+const OUTSET_HIKITE_DIRECTION_IMAGE = "/images/吊元/outset_hikite_direction.png";
 const HIRAKI_TSURIMOTO_IMAGE = "/images/吊元/hirakidoturimoto.png";
 const YUKA_TODOMATARI_IMAGE = "/images/吊元/yuka-todomatari.jpg";
 const ARM_STOPPER_IMAGE = "/images/吊元/arm-stopper.jpg";
@@ -182,8 +198,110 @@ const DANSA_KUBUN_OPTIONS = [
   { value: "custom", label: "手入力" },
 ];
 
+export const FLOOR_MIKIRI_OPTIONS = [
+  { value: "43mmタイプ", label: "43mmタイプ", size: "W43 × H15mm", image: "/images/floor_mikiri/43mm.png" },
+  { value: "82mmタイプ", label: "82mmタイプ", size: "W82 × H15mm", image: "/images/floor_mikiri/82mm.png" },
+  { value: "フロアー用見切り材（樹脂製）12mmタイプ", label: "フロアー用見切り材（樹脂製）12mmタイプ", size: "W43 × H15mm", image: "/images/floor_mikiri/floor_12mm.png" },
+  { value: "床見切縁（樹脂製）", label: "床見切縁（樹脂製）", size: "W35 × H15mm", image: "/images/floor_mikiri/floor_edge.png" },
+];
+
+export function TateguAccessoryControls({
+  kagi,
+  setKagi,
+  floorMikiri,
+  setFloorMikiri,
+  floorMikiriType,
+  setFloorMikiriType,
+  floorMikiriSize,
+  setFloorMikiriSize,
+  floorMikiriImage,
+  setFloorMikiriImage,
+}: {
+  kagi?: string;
+  setKagi?: (v: string) => void;
+  floorMikiri?: string;
+  setFloorMikiri?: (v: string) => void;
+  floorMikiriType?: string;
+  setFloorMikiriType?: (v: string) => void;
+  floorMikiriSize?: string;
+  setFloorMikiriSize?: (v: string) => void;
+  floorMikiriImage?: string;
+  setFloorMikiriImage?: (v: string) => void;
+}) {
+  if (!setKagi || !setFloorMikiri || !setFloorMikiriType || !setFloorMikiriSize || !setFloorMikiriImage) return null;
+
+  const handleFloorMikiriChange = (value: string) => {
+    const nextValue = floorMikiri === value ? "" : value;
+    setFloorMikiri(nextValue);
+    if (nextValue !== "yes") {
+      setFloorMikiriType("");
+      setFloorMikiriSize("");
+      setFloorMikiriImage("");
+    }
+  };
+
+  return (
+    <>
+      <OptionButtons
+        label="鍵"
+        options={[{ value: "yes", label: "有" }, { value: "no", label: "無" }]}
+        value={kagi ?? ""}
+        onChange={setKagi}
+      />
+      <OptionButtons
+        label="床見切り"
+        options={[{ value: "yes", label: "有" }, { value: "no", label: "無" }]}
+        value={floorMikiri ?? ""}
+        onChange={handleFloorMikiriChange}
+      />
+      {floorMikiri === "yes" && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {FLOOR_MIKIRI_OPTIONS.map((option) => {
+            const active = floorMikiriType === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => {
+                  const nextValue = active ? "" : option.value;
+                  setFloorMikiriType(nextValue);
+                  setFloorMikiriSize(active ? "" : option.size);
+                  setFloorMikiriImage(active ? "" : option.image);
+                }}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  active
+                    ? "bg-primary text-primary-foreground"
+                    : "border border-input text-foreground hover:bg-accent"
+                }`}
+              >
+                <img
+                  src={option.image}
+                  alt={option.label}
+                  className={`mb-2 h-24 w-full max-w-36 rounded object-contain ${active ? "bg-white/90" : "bg-muted/30"}`}
+                />
+                <span className="block leading-snug">{option.label}</span>
+                <span className="block text-xs opacity-80 mt-1">{option.size}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
 export function TateguDetail(props: TateguDetailProps) {
   const { spec } = props;
+  const outsetRailWidthOptions = props.outset_kagi === "yes"
+    ? [{ value: "1575mm", label: "1575mm" }, { value: "1315mm", label: "1315mm" }]
+    : [{ value: "1638mm", label: "1638mm" }, { value: "1378mm", label: "1378mm" }];
+
+  React.useEffect(() => {
+    if (spec !== "アウトセット片引き" || !props.outset_rail_width) return;
+    if (!outsetRailWidthOptions.some((option) => option.value === props.outset_rail_width)) {
+      props.setOutset_rail_width?.("");
+    }
+  }, [spec, props.outset_kagi, props.outset_rail_width]);
 
   return (
     <div className="space-y-4">
@@ -208,12 +326,25 @@ export function TateguDetail(props: TateguDetailProps) {
         </>
       )}
 
+      <TateguAccessoryControls
+        kagi={props.kagi}
+        setKagi={props.setKagi}
+        floorMikiri={props.floorMikiri}
+        setFloorMikiri={props.setFloorMikiri}
+        floorMikiriType={props.floorMikiriType}
+        setFloorMikiriType={props.setFloorMikiriType}
+        floorMikiriSize={props.floorMikiriSize}
+        setFloorMikiriSize={props.setFloorMikiriSize}
+        floorMikiriImage={props.floorMikiriImage}
+        setFloorMikiriImage={props.setFloorMikiriImage}
+      />
+
       {/* ===== 片開き ===== */}
       {spec === "片開き" && (
         <div className="space-y-4">
           <OptionButtons
             label="W"
-            options={[735, 755, 780, 825, 875].map((v) => ({ value: String(v), label: String(v) })).concat([{ value: "order", label: "オーダー" }])}
+            options={[650, 735, 755, 780, 825, 875].map((v) => ({ value: String(v), label: String(v) })).concat([{ value: "order", label: "オーダー" }])}
             value={props.katabiraki_w}
             onChange={props.setKatabiraki_w}
           />
@@ -264,6 +395,47 @@ export function TateguDetail(props: TateguDetailProps) {
           <OptionButtons label="枠見込み" options={MIKOMI_OPTIONS} value={props.katahiki_mikomi} onChange={props.setKatahiki_mikomi} />
           <OptionButtons label="引手" options={HIKITE_OPTIONS} value={props.katahiki_hikite} onChange={props.setKatahiki_hikite} />
           <ReferenceImage src={HIKITE_IMAGE} alt="引手" />
+        </div>
+      )}
+
+      {/* ===== アウトセット片引き ===== */}
+      {spec === "アウトセット片引き" && (
+        <div className="space-y-4">
+          {props.setOutset_kagi && (
+            <OptionButtons
+              label="表示錠"
+              options={[{ value: "yes", label: "表示錠 有" }, { value: "no", label: "表示錠 無" }]}
+              value={props.outset_kagi ?? ""}
+              onChange={props.setOutset_kagi}
+            />
+          )}
+          {props.setOutset_hikite && (
+            <>
+              <OptionButtons
+                label="引手方向"
+                options={[{ value: "right_hikite", label: "右引手" }, { value: "left_hikite", label: "左引手" }]}
+                value={props.outset_hikite ?? ""}
+                onChange={props.setOutset_hikite}
+              />
+              <ReferenceImage src={OUTSET_HIKITE_DIRECTION_IMAGE} alt="左引手・右引手" />
+            </>
+          )}
+          {props.setOutset_rail_width && (
+            <OptionButtons
+              label="レール幅"
+              options={outsetRailWidthOptions}
+              value={props.outset_rail_width ?? ""}
+              onChange={props.setOutset_rail_width}
+            />
+          )}
+          {props.setOutset_ch && (
+            <OptionButtons
+              label="CH"
+              options={[{ value: "2400", label: "2400" }, { value: "2035", label: "2035" }]}
+              value={props.outset_ch ?? ""}
+              onChange={props.setOutset_ch}
+            />
+          )}
         </div>
       )}
 

@@ -54,6 +54,16 @@ const KITCHEN_PRODUCTS = [
   { maker: "クリナップ", name: "ラクエラ", spec: "標準仕様", base: 610000 },
 ];
 
+const L_SHAPE_SIZE_OPTIONS = [
+  "1800×1650",
+  "1950×1650",
+  "2100×1650",
+  "2250×1650",
+  "2400×1650",
+  "2550×1650",
+  "2700×1650",
+];
+
 type KitchenProductCandidate = {
   maker: string;
   name: string;
@@ -113,7 +123,7 @@ function optionPrice(state: KitchenBodyState) {
   if (state.shape === "L型") price += 160000;
   if (state.shape === "フラット対面") price += 240000;
   if (state.depth === "D650") price += 20000;
-  if (state.width) price += Math.max(0, (Number(state.width.replace("W", "")) - 1800) / 150) * 12000;
+  if (state.shape !== "L型" && state.width) price += Math.max(0, (Number(state.width.replace("W", "")) - 1800) / 150) * 12000;
   if (state.drawer === "スライド") price += 70000;
   if (state.endPanel === "有") price += 30000;
   if (state.wallCabinet === "有") price += 70000;
@@ -129,12 +139,13 @@ function optionPrice(state: KitchenBodyState) {
 export function KitchenBodySection({ state, onChange, onUnitPriceChange }: Props) {
   const flat = state.shape === "フラット対面";
   const showExchangeDetails = state.existing === "交換";
+  const isCustomLSize = state.shape === "L型" && state.lSize !== "" && !L_SHAPE_SIZE_OPTIONS.includes(state.lSize);
   const [sortOrder, setSortOrder] = React.useState<"standard" | "cheap">("standard");
   const cheapSort = sortOrder === "cheap";
   const pricingState = cheapSort ? { ...state, ...CHEAP_SORT_FIXED_VALUES } : state;
   const candidates = useMemo(() => {
     const option = optionPrice(pricingState);
-    const selectedSize = pricingState.shape === "L型" ? pricingState.lSize : pricingState.width;
+    const selectedSize = pricingState.shape === "L型" && pricingState.lSize === "その他" ? "" : pricingState.shape === "L型" ? pricingState.lSize : pricingState.width;
     if (!selectedSize) return [];
     const products: KitchenProductCandidate[] = KITCHEN_PRODUCTS.map((product) => {
       const ihAdd = pricingState.heating === "IH" ? KITCHEN_IH_ADDS[product.maker] : 0;
@@ -178,20 +189,27 @@ export function KitchenBodySection({ state, onChange, onUnitPriceChange }: Props
 
           {state.shape === "L型" && (
             <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground block">サイズ</label>
-              <input
-                value={state.lSize}
-                onChange={(event) => onChange({ lSize: event.target.value })}
-                placeholder="今後追加予定"
-                className="w-full border border-input rounded-lg px-3 py-2.5 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              <ButtonGroup
+                label="サイズ"
+                options={[...L_SHAPE_SIZE_OPTIONS, "その他"]}
+                value={isCustomLSize ? "その他" : state.lSize}
+                onChange={(lSize) => onChange({ lSize })}
               />
+              {(state.lSize === "その他" || isCustomLSize) && (
+                <input
+                  value={isCustomLSize ? state.lSize : ""}
+                  onChange={(event) => onChange({ lSize: event.target.value })}
+                  placeholder="例：2100×1800"
+                  className="w-full border border-input rounded-lg px-3 py-2.5 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              )}
             </div>
           )}
 
           {(state.shape === "I型" || state.shape === "L型" || flat) && (
             <>
               {!flat && <ButtonGroup label="奥行" options={["D650", "D600"]} value={state.depth} onChange={(depth) => onChange({ depth })} />}
-              {!flat && <ButtonGroup label="幅" options={["W1800", "W1950", "W2100", "W2250", "W2400", "W2550"]} value={state.width} onChange={(width) => onChange({ width })} />}
+              {!flat && state.shape !== "L型" && <ButtonGroup label="幅" options={["W1800", "W1950", "W2100", "W2250", "W2400", "W2550"]} value={state.width} onChange={(width) => onChange({ width })} />}
               <ButtonGroup label="加熱機器" options={["ガスコンロ", "IH"]} value={state.heating} onChange={(heating) => onChange({ heating })} disabled={cheapSort} />
               <ButtonGroup label="引き出し仕様" options={["開き", "スライド"]} value={pricingState.drawer} onChange={(drawer) => onChange({ drawer })} disabledOptions={flat ? ["開き"] : []} disabled={cheapSort} />
               {!flat && <ButtonGroup label="エンドパネル" options={["有", "無"]} value={pricingState.endPanel} onChange={(endPanel) => onChange({ endPanel })} disabled={cheapSort} />}

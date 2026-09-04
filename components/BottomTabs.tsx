@@ -8,16 +8,64 @@ import { X } from "lucide-react";
 
 // ========== Content Panel ==========
 function ContentPanel({ onClose }: { onClose: () => void }) {
-  const { state, removeWorkItem, setStep, selectRoom } = useApp();
-  const grouped = state.selectedWorkItems.reduce<Record<string, typeof state.selectedWorkItems>>(
-    (acc, item) => {
-      const roomLabel = normalizeRoomLabel(item.roomLabel);
-      if (!acc[roomLabel]) acc[roomLabel] = [];
-      acc[roomLabel].push(item);
-      return acc;
-    },
-    {}
-  );
+  const { state, removeWorkItem, setStep, selectRoom, copyRoomWorkItems } = useApp();
+  const [copySourceRoomKey, setCopySourceRoomKey] = useState<string | null>(null);
+  const [copyTargetRoomKey, setCopyTargetRoomKey] = useState("");
+  const [pendingCopy, setPendingCopy] = useState<{ sourceRoomKey: string; targetRoomKey: string } | null>(null);
+  const roomEntries = state.selectedWorkItems.reduce<
+    { roomKey: string; roomLabel: string; items: typeof state.selectedWorkItems }[]
+  >((acc, item) => {
+    const roomKey = item.roomKey;
+    const roomLabel = normalizeRoomLabel(item.roomLabel);
+    const room = acc.find((entry) => entry.roomKey === roomKey);
+    if (room) {
+      room.items.push(item);
+    } else {
+      acc.push({ roomKey, roomLabel, items: [item] });
+    }
+    return acc;
+  }, []);
+
+  const getRoomLabel = (roomKey: string) => {
+    const generatedRoom = state.generatedRooms.find((room) => room.roomKey === roomKey);
+    const selectedRoom = roomEntries.find((room) => room.roomKey === roomKey);
+    return normalizeRoomLabel(generatedRoom?.label ?? selectedRoom?.roomLabel ?? roomKey);
+  };
+
+  const handleRoomNavClick = (roomKey: string) => {
+    selectRoom(roomKey);
+    onClose();
+    setStep(3);
+  };
+
+  const resetCopyUi = () => {
+    setCopySourceRoomKey(null);
+    setCopyTargetRoomKey("");
+    setPendingCopy(null);
+  };
+
+  const handleOpenCopy = (roomKey: string) => {
+    setPendingCopy(null);
+    setCopySourceRoomKey((current) => (current === roomKey ? null : roomKey));
+    setCopyTargetRoomKey("");
+  };
+
+  const handleCopy = (sourceRoomKey: string) => {
+    if (!copyTargetRoomKey) return;
+    const hasTargetItems = state.selectedWorkItems.some((item) => item.roomKey === copyTargetRoomKey);
+    if (hasTargetItems) {
+      setPendingCopy({ sourceRoomKey, targetRoomKey: copyTargetRoomKey });
+      return;
+    }
+    copyRoomWorkItems(sourceRoomKey, copyTargetRoomKey);
+    resetCopyUi();
+  };
+
+  const handleConfirmCopy = () => {
+    if (!pendingCopy) return;
+    copyRoomWorkItems(pendingCopy.sourceRoomKey, pendingCopy.targetRoomKey);
+    resetCopyUi();
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -27,19 +75,104 @@ function ContentPanel({ onClose }: { onClose: () => void }) {
           <X className="w-5 h-5" />
         </button>
       </div>
+      <div className="flex gap-2">
+        <button
+          onClick={() => { onClose(); setStep(3); selectRoom(null); }}
+          className="flex-1 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80"
+        >
+          トップに戻る
+        </button>
+        <button
+          onClick={() => { onClose(); setStep(3); }}
+          className="flex-1 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80"
+        >
+          工事項目に戻る
+        </button>
+      </div>
+      {roomEntries.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {roomEntries.map(({ roomKey, roomLabel }) => (
+            <button
+              key={roomKey}
+              type="button"
+              onClick={() => handleRoomNavClick(roomKey)}
+              className="px-3 py-1.5 rounded-lg border border-input text-xs font-medium text-foreground hover:bg-accent transition-colors"
+            >
+              {roomLabel}
+            </button>
+          ))}
+        </div>
+      )}
       {state.selectedWorkItems.length === 0 ? (
         <p className="text-sm text-muted-foreground">選択された工事項目はありません。</p>
       ) : (
-        Object.entries(grouped).map(([roomLabel, items]) => {
+        roomEntries.map(({ roomKey, roomLabel, items }) => {
           // Number display map
           const numberMap: { [key: number]: string } = {
             1: "①", 2: "②", 3: "③", 4: "④", 5: "⑤",
             6: "⑥", 7: "⑦", 8: "⑧", 9: "⑨", 10: "⑩",
           };
+          const copyTargetRooms = state.generatedRooms.filter((room) => room.roomKey !== roomKey);
 
           return (
-            <div key={roomLabel}>
-              <p className="font-semibold text-sm text-foreground mb-1">{roomLabel}</p>
+            <div key={roomKey}>
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <p className="font-semibold text-sm text-foreground">{roomLabel}</p>
+                <button
+                  type="button"
+                  onClick={() => handleOpenCopy(roomKey)}
+                  disabled={copyTargetRooms.length === 0}
+                  className="px-2.5 py-1 rounded-lg border border-input text-xs font-medium text-foreground hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  この部屋の内容をコピー
+                </button>
+              </div>
+              {copySourceRoomKey === roomKey && (
+                <div className="mb-2 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
+                  <select
+                    value={copyTargetRoomKey}
+                    onChange={(e) => {
+                      setCopyTargetRoomKey(e.target.value);
+                      setPendingCopy(null);
+                    }}
+                    className="min-w-36 rounded-lg border border-input bg-background px-2 py-1.5 text-xs text-foreground"
+                  >
+                    <option value="">コピー先を選択</option>
+                    {copyTargetRooms.map((room) => (
+                      <option key={room.roomKey} value={room.roomKey}>
+                        {normalizeRoomLabel(room.label)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(roomKey)}
+                    disabled={!copyTargetRoomKey}
+                    className="px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium hover:bg-secondary/80 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    コピー
+                  </button>
+                  {pendingCopy?.sourceRoomKey === roomKey && (
+                    <div className="flex w-full flex-wrap items-center gap-2 text-xs text-foreground">
+                      <span>{getRoomLabel(pendingCopy.targetRoomKey)}にはすでに選択内容があります。上書きしますか？</span>
+                      <button
+                        type="button"
+                        onClick={() => setPendingCopy(null)}
+                        className="px-3 py-1.5 rounded-lg border border-input text-xs font-medium text-foreground hover:bg-accent transition-colors"
+                      >
+                        キャンセル
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleConfirmCopy}
+                        className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 transition-colors"
+                      >
+                        上書きする
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
               {items.map((item, idx) => {
                 // Count instances with same title for display numbering
                 const sameTitle = items.filter((i) => i.title === item.title);
@@ -73,20 +206,6 @@ function ContentPanel({ onClose }: { onClose: () => void }) {
           );
         })
       )}
-      <div className="flex gap-2 mt-2">
-        <button
-          onClick={() => { onClose(); setStep(3); selectRoom(null); }}
-          className="flex-1 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80"
-        >
-          トップに戻る
-        </button>
-        <button
-          onClick={() => { onClose(); setStep(3); }}
-          className="flex-1 py-2 rounded-lg bg-secondary text-secondary-foreground text-sm font-medium hover:bg-secondary/80"
-        >
-          工事項目に戻る
-        </button>
-      </div>
     </div>
   );
 }

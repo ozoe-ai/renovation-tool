@@ -1,0 +1,12 @@
+packages:
+  - "."
+
+allowBuilds:
+  "@firebase/util": true
+  protobufjs: true
+  sharp: true
+
+onlyBuiltDependencies:
+  - "@firebase/util"
+  - protobufjs
+  - sharp

@@ -33,6 +33,7 @@ const FIELD_LABELS: Record<string, string> = {
   kitchenShape: "形状",
   kitchenDepth: "奥行",
   kitchenWidth: "サイズ",
+  kitchenLSize: "サイズ",
   kitchenHeating: "加熱機器",
   kitchenDrawer: "引き出し",
   kitchenWallCabinet: "吊戸",
@@ -56,6 +57,29 @@ const FIELD_LABELS: Record<string, string> = {
   ubBodySize: "サイズ",
   senmenBodySize: "サイズ",
 };
+
+Object.assign(FIELD_LABELS, {
+  intercomAutoLock: "オートロック",
+  intercomDetail: "インターホン",
+  ldkTateguKagi: "鍵",
+  ldkTateguFloorMikiri: "床見切り",
+  ldkTateguFloorMikiriType: "床見切り種類",
+  ldkTateguFloorMikiriSize: "床見切りサイズ",
+  ldkTateguFloorMikiriImage: "床見切り画像情報",
+  ldkOutsetKatahikiKagi: "表示錠",
+  ldkOutsetKatahikiHikite: "引手方向",
+  ldkOutsetKatahikiRailWidth: "レール幅",
+  ldkOutsetKatahikiCh: "CH",
+  yoshitsuTateguKagi: "鍵",
+  yoshitsuTateguFloorMikiri: "床見切り",
+  yoshitsuTateguFloorMikiriType: "床見切り種類",
+  yoshitsuTateguFloorMikiriSize: "床見切りサイズ",
+  yoshitsuTateguFloorMikiriImage: "床見切り画像情報",
+  yoshitsuOutsetKatahikiKagi: "表示錠",
+  yoshitsuOutsetKatahikiHikite: "引手方向",
+  yoshitsuOutsetKatahikiRailWidth: "レール幅",
+  yoshitsuOutsetKatahikiCh: "CH",
+});
 
 const ROOM_VALUE_LABELS: Record<string, string> = {
   GENKAN: "玄関",
@@ -101,6 +125,8 @@ const VALUE_LABELS: Record<string, string> = {
   order: "オーダー",
   dl_change: "DL交換",
   dl_new: "DL新規",
+  right_hikite: "右引手",
+  left_hikite: "左引手",
 };
 
 const ROOM_LIST_LABELS = new Set(Object.values(ROOM_VALUE_LABELS));
@@ -143,7 +169,7 @@ function isSelectionField(key: string, value: unknown) {
   const lower = key.toLowerCase();
   if (EXCLUDED_SELECTION_FIELDS.has(key)) return false;
   if (CALCULATION_FIELD_PATTERNS.some((pattern) => lower.includes(pattern))) return false;
-  if (lower.includes("photo") || lower.includes("image") || lower.includes("photos")) return false;
+  if (!lower.includes("floormikiriimage") && (lower.includes("photo") || lower.includes("image") || lower.includes("photos"))) return false;
   if (lower.includes("price") || lower.includes("subtotal")) return false;
   if (value === undefined || value === null || value === "") return false;
   if (typeof value === "number" && !Number.isInteger(value)) return false;
@@ -158,7 +184,7 @@ function selectionValue(value: unknown) {
   return translateSelectionValue(String(value));
 }
 
-function translateSelectionValue(value: string) {
+function translateSelectionValue(value: string): string {
   const commaParts = value.split(",").map((part) => part.trim()).filter(Boolean);
   if (commaParts.length > 1) return commaParts.map(translateSelectionValue).filter(Boolean).join("・");
 
@@ -310,7 +336,7 @@ export async function POST(request: NextRequest) {
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({
         projectName: state.projectName || "",
-        customerName: state.customerName || "",
+        customerName: "",
         honorific: "\u69d8",
         discount: 0,
         total: totalAmount,

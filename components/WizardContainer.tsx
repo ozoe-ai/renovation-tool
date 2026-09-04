@@ -10,6 +10,10 @@ import { WorkDetailScreen } from "./screens/WorkDetailScreen";
 import { MemoScreen } from "./screens/MemoScreen";
 import { FinalConfirmScreen } from "./screens/FinalConfirmScreen";
 import { BottomTabs } from "./BottomTabs";
+import { ProjectActionsBar } from "./ProjectActionsBar";
+import { ProjectListScreen } from "./screens/ProjectListScreen";
+import { PROJECT_LIST_STEP } from "@/lib/store";
+import { AuthControls } from "./AuthControls";
 
 export function WizardContainer() {
   const { state } = useApp();
@@ -22,12 +26,15 @@ export function WizardContainer() {
     <WorkDetailScreen key="work-detail" />,        // step 4
     <MemoScreen key="memo" />,                     // step 5
     <FinalConfirmScreen key="final-confirm" />,    // step 6
+    <ProjectListScreen key="project-list" />,      // step 7
   ];
 
   return (
     <div className="min-h-screen bg-background pb-[52px]">
+      <AuthControls />
+      <ProjectActionsBar />
       {screens[state.currentStep] ?? <InitialInfoScreen />}
-      <BottomTabs />
+      {state.currentStep !== PROJECT_LIST_STEP && <BottomTabs />}
     </div>
   );
 }

@@ -390,6 +390,11 @@ export interface SelectedWorkItem {
   ldkNimaiKatahiki_h_custom?: number;
   ldkNimaiKatahiki_hikite?: string;
   ldkNimaiKatahiki_hikite_photo?: string;
+  // アウトセット片引き
+  ldkOutsetKatahikiKagi?: string;
+  ldkOutsetKatahikiHikite?: string;
+  ldkOutsetKatahikiRailWidth?: string;
+  ldkOutsetKatahikiCh?: string;
   // 洋室も同様（yoshitsuTategu_* プレフィックス）
   yoshitsuTateguDansa?: string;
   yoshitsuTateguDansaKubun?: string;
@@ -408,6 +413,10 @@ export interface SelectedWorkItem {
   yoshitsuNimaiKatahiki_h_custom?: number;
   yoshitsuNimaiKatahiki_hikite?: string;
   yoshitsuNimaiKatahiki_hikite_photo?: string;
+  yoshitsuOutsetKatahikiKagi?: string;
+  yoshitsuOutsetKatahikiHikite?: string;
+  yoshitsuOutsetKatahikiRailWidth?: string;
+  yoshitsuOutsetKatahikiCh?: string;
   // LD用の追加フィールド（洋室と同一ロジック流用）
   ldIriguchiW?: string;
   ldIriguchiD?: string;
@@ -489,6 +498,22 @@ export interface SelectedWorkItem {
   hanbantaiCircuits?: string | number; // 回路数: 6 / 8 / 10 / 12 / 14 / 16 / 18 / 20 / 22 / 手入力
 }
 
+export interface SelectedWorkItem {
+  habakiUnitPrice?: number;
+  intercomAutoLock?: string;
+  intercomDetail?: string;
+  ldkTateguKagi?: string;
+  ldkTateguFloorMikiri?: string;
+  ldkTateguFloorMikiriType?: string;
+  ldkTateguFloorMikiriSize?: string;
+  ldkTateguFloorMikiriImage?: string;
+  yoshitsuTateguKagi?: string;
+  yoshitsuTateguFloorMikiri?: string;
+  yoshitsuTateguFloorMikiriType?: string;
+  yoshitsuTateguFloorMikiriSize?: string;
+  yoshitsuTateguFloorMikiriImage?: string;
+}
+
 /** Room count settings from Step 2 */
 export interface RoomCountSettings {
   propertyType: "マンション" | "戸建";
@@ -524,8 +549,12 @@ export interface LoanCalc {
 /** Bottom tab type */
 export type BottomTab = "content" | "loan" | "total";
 
+export type ProjectStatus = "draft" | "completed";
+
 /** Full app state */
 export interface AppState {
+  activeProjectId: string | null;
+  activeProjectStatus: ProjectStatus | null;
   currentStep: number;
   // Step 0: Initial info
   projectName: string;
@@ -547,4 +576,13 @@ export interface AppState {
   activeBottomTab: BottomTab | null;
   // Loan
   loan: LoanCalc | null;
+}
+
+export interface SavedEstimateProject {
+  id: string;
+  name: string;
+  status: ProjectStatus;
+  createdAt: string;
+  updatedAt: string;
+  state: AppState;
 }

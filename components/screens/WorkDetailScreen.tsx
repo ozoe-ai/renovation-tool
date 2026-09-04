@@ -3,7 +3,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useApp } from "@/lib/WizardContext";
 import { getWorkItemsForRoom, getRoomTypeDef } from "@/lib/config";
-import { TateguDetail } from "./TateguDetail";
+import { TateguAccessoryControls, TateguDetail } from "./TateguDetail";
 import { StorageDetail } from "./StorageDetail";
 import { StorageInsideSection, type StorageInsideState } from "./StorageInsideSection";
 import { KitchenBodySection, type KitchenBodyState } from "./KitchenBodySection";
@@ -134,6 +134,7 @@ const STORAGE_SPEC_IMAGES: Record<string, string> = {
 const TATEGU_SPEC_IMAGES: Record<string, string> = {
   "片開き": "/images/tategu_spec/katabiraki_o1.png",
   "片引き": "/images/tategu_spec/katahiki_q1.png",
+  "アウトセット片引き": "/images/tategu_spec/outset_katahiki.png",
   "2枚引き違い戸": "/images/tategu_spec/nimai_hikichigai_u5.png",
   "2枚引き違い": "/images/tategu_spec/nimai_hikichigai_u5.png",
   "2枚片引き": "/images/tategu_spec/nimai_renndou_katahiki_u9.png",
@@ -149,6 +150,8 @@ const TATEGU_SPEC_IMAGES: Record<string, string> = {
   "3譫壼ｼ輔″驕輔＞謌ｸ": "/images/tategu_spec/sanmai_hikichigai_u7.png",
   "3譫夂援蠑輔″": "/images/tategu_spec/sanmai_renndou_katahiki_u8.png",
 };
+const DEFAULT_TATEGU_SPECS = ["片開き", "片引き", "アウトセット片引き", "2枚引き違い戸", "2枚片引き", "3枚引き違い戸", "3枚片引き"];
+const TOILET_TATEGU_SPECS = ["片開き", "片引き"];
 
 const CONCENT_SWITCH_IMAGES: Record<string, string> = {
   round: "/images/全体項目/round.jpg",
@@ -492,6 +495,8 @@ export function WorkDetailScreen() {
   const [yoshitsuAmidoColor, setYoshitsuAmidoColor] = useState(item?.yoshitsuAmidoColor ?? "");
   // 全体項目：給湯器用の追加state
   const [kyutoukiHinban, setKyutoukiHinban] = useState(item?.kyutoukiHinban ?? "");
+  const [intercomAutoLock, setIntercomAutoLock] = useState(item?.intercomAutoLock ?? "");
+  const [intercomDetail, setIntercomDetail] = useState(item?.intercomDetail ?? "");
   // 和室用の追加state
   const [washitsuYoushitsuTatamiMm, setWashitsuYoushitsuTatamiMm] = useState<number | undefined>(item?.washitsuYoushitsuTatamiMm);
   const [washitsuShojiRailFinish, setWashitsuShojiRailFinish] = useState(item?.washitsuShojiRailFinish ?? "");
@@ -658,6 +663,11 @@ export function WorkDetailScreen() {
   const [ldkTateguDansaKubun, setLdkTateguDansaKubun] = useState(item?.ldkTateguDansaKubun ?? "");
   const [ldkTateguDansaCustomMm, setLdkTateguDansaCustomMm] = useState<number | undefined>(item?.ldkTateguDansaCustomMm);
   const [ldkTateguSpec, setLdkTateguSpec] = useState(item?.ldkTateguSpec ?? "");
+  const [ldkTateguKagi, setLdkTateguKagi] = useState(item?.ldkTateguKagi ?? "");
+  const [ldkTateguFloorMikiri, setLdkTateguFloorMikiri] = useState(item?.ldkTateguFloorMikiri ?? "");
+  const [ldkTateguFloorMikiriType, setLdkTateguFloorMikiriType] = useState(item?.ldkTateguFloorMikiriType ?? "");
+  const [ldkTateguFloorMikiriSize, setLdkTateguFloorMikiriSize] = useState(item?.ldkTateguFloorMikiriSize ?? "");
+  const [ldkTateguFloorMikiriImage, setLdkTateguFloorMikiriImage] = useState(item?.ldkTateguFloorMikiriImage ?? "");
   // LDK 片開き
   const [ldkKatabiraki_w, setLdkKatabiraki_w] = useState(item?.ldkKatabiraki_w ?? "");
   const [ldkKatabiraki_h, setLdkKatabiraki_h] = useState(item?.ldkKatabiraki_h ?? "");
@@ -716,11 +726,21 @@ export function WorkDetailScreen() {
   const [ldkNimaiKatahiki_h_custom, setLdkNimaiKatahiki_h_custom] = useState<number | undefined>(item?.ldkNimaiKatahiki_h_custom);
   const [ldkNimaiKatahiki_hikite, setLdkNimaiKatahiki_hikite] = useState(item?.ldkNimaiKatahiki_hikite ?? "");
   const [ldkNimaiKatahiki_hikite_photo, setLdkNimaiKatahiki_hikite_photo] = useState(item?.ldkNimaiKatahiki_hikite_photo ?? "");
+  // LDK アウトセット片引き
+  const [ldkOutsetKatahikiKagi, setLdkOutsetKatahikiKagi] = useState(item?.ldkOutsetKatahikiKagi ?? "");
+  const [ldkOutsetKatahikiHikite, setLdkOutsetKatahikiHikite] = useState(item?.ldkOutsetKatahikiHikite ?? "");
+  const [ldkOutsetKatahikiRailWidth, setLdkOutsetKatahikiRailWidth] = useState(item?.ldkOutsetKatahikiRailWidth ?? "");
+  const [ldkOutsetKatahikiCh, setLdkOutsetKatahikiCh] = useState(item?.ldkOutsetKatahikiCh ?? "");
   // 洋室建具
   const [yoshitsuTateguDansa, setYoshitsuTateguDansa] = useState(item?.yoshitsuTateguDansa ?? "");
   const [yoshitsuTateguDansaKubun, setYoshitsuTateguDansaKubun] = useState(item?.yoshitsuTateguDansaKubun ?? "");
   const [yoshitsuTateguDansaCustomMm, setYoshitsuTateguDansaCustomMm] = useState<number | undefined>(item?.yoshitsuTateguDansaCustomMm);
   const [yoshitsuTateguSpec, setYoshitsuTateguSpec] = useState(item?.yoshitsuTateguSpec ?? "");
+  const [yoshitsuTateguKagi, setYoshitsuTateguKagi] = useState(item?.yoshitsuTateguKagi ?? "");
+  const [yoshitsuTateguFloorMikiri, setYoshitsuTateguFloorMikiri] = useState(item?.yoshitsuTateguFloorMikiri ?? "");
+  const [yoshitsuTateguFloorMikiriType, setYoshitsuTateguFloorMikiriType] = useState(item?.yoshitsuTateguFloorMikiriType ?? "");
+  const [yoshitsuTateguFloorMikiriSize, setYoshitsuTateguFloorMikiriSize] = useState(item?.yoshitsuTateguFloorMikiriSize ?? "");
+  const [yoshitsuTateguFloorMikiriImage, setYoshitsuTateguFloorMikiriImage] = useState(item?.yoshitsuTateguFloorMikiriImage ?? "");
   // 洋室 片開き
   const [yoshitsuKatabiraki_w, setYoshitsuKatabiraki_w] = useState(item?.yoshitsuKatabiraki_w ?? "");
   const [yoshitsuKatabiraki_h, setYoshitsuKatabiraki_h] = useState(item?.yoshitsuKatabiraki_h ?? "");
@@ -779,6 +799,11 @@ export function WorkDetailScreen() {
   const [yoshitsuNimaiKatahiki_h_custom, setYoshitsuNimaiKatahiki_h_custom] = useState<number | undefined>(item?.yoshitsuNimaiKatahiki_h_custom);
   const [yoshitsuNimaiKatahiki_hikite, setYoshitsuNimaiKatahiki_hikite] = useState(item?.yoshitsuNimaiKatahiki_hikite ?? "");
   const [yoshitsuNimaiKatahiki_hikite_photo, setYoshitsuNimaiKatahiki_hikite_photo] = useState(item?.yoshitsuNimaiKatahiki_hikite_photo ?? "");
+  // 洋室 アウトセット片引き
+  const [yoshitsuOutsetKatahikiKagi, setYoshitsuOutsetKatahikiKagi] = useState(item?.yoshitsuOutsetKatahikiKagi ?? "");
+  const [yoshitsuOutsetKatahikiHikite, setYoshitsuOutsetKatahikiHikite] = useState(item?.yoshitsuOutsetKatahikiHikite ?? "");
+  const [yoshitsuOutsetKatahikiRailWidth, setYoshitsuOutsetKatahikiRailWidth] = useState(item?.yoshitsuOutsetKatahikiRailWidth ?? "");
+  const [yoshitsuOutsetKatahikiCh, setYoshitsuOutsetKatahikiCh] = useState(item?.yoshitsuOutsetKatahikiCh ?? "");
 
   const lineSubtotal = useMemo(() => qty * unitPrice, [qty, unitPrice]);
   const showCrossCalculator = isZentaiCross && selectedOption === "yes";
@@ -1016,6 +1041,7 @@ export function WorkDetailScreen() {
   // 全体項目：分電盤
   const isZentaiHanbantai = masterDef?.id.includes("zentai_hanbantai");
   const showHanbantaiOptions = isZentaiHanbantai && selectedOption === "change";
+  const isZentaiIntercom = masterDef?.id.includes("zentai_intercom");
 
   // 和室：照明スイッチ「有」の場合に注意文表示
   const isWashitsuSwitch = masterDef?.id.includes("washitsu_switch");
@@ -1181,6 +1207,12 @@ export function WorkDetailScreen() {
   // 洋室 建具
   const isYoshitsuTategu = masterDef?.id.includes("yoshitsu_tategu") || masterDef?.id.includes("senmen_iriguchi") || masterDef?.id.includes("toilet_iriguchi");
   const showYoshitsuTateguChange = isYoshitsuTategu && selectedOption === "change";
+  const currentTateguSpecs = masterDef?.id.includes("toilet_iriguchi") ? TOILET_TATEGU_SPECS : DEFAULT_TATEGU_SPECS;
+  useEffect(() => {
+    if (masterDef?.id.includes("toilet_iriguchi") && yoshitsuTateguSpec && !TOILET_TATEGU_SPECS.includes(yoshitsuTateguSpec)) {
+      setYoshitsuTateguSpec("");
+    }
+  }, [masterDef?.id, yoshitsuTateguSpec]);
   // LDK 収納（ld_storage のみ、ld_storage_inside は除��）
   const isLdkStorage = masterDef?.id === "ld_storage" || (masterDef?.id.includes("ld_storage") && !masterDef?.id.includes("ld_storage_inside"));
   const isKitchenStorage = !!(masterDef?.id && masterDef.id.includes("kitchen_storage") && !masterDef.id.includes("kitchen_storage_inside"));
@@ -1375,11 +1407,11 @@ export function WorkDetailScreen() {
         kitchenExisting: isKitchenBody ? kitchenExisting : undefined,
         kitchenShape: isKitchenBody ? kitchenShape : undefined,
         kitchenDepth: isKitchenBody ? kitchenDepth : undefined,
-        kitchenWidth: isKitchenBody ? kitchenWidth : undefined,
+        kitchenWidth: isKitchenBody && kitchenShape !== "L型" ? kitchenWidth : undefined,
         kitchenHeating: isKitchenBody ? kitchenHeating : undefined,
         kitchenDrawer: isKitchenBody ? kitchenDrawer : undefined,
         kitchenEndPanel: isKitchenBody ? kitchenEndPanel : undefined,
-        kitchenLSize: isKitchenBody ? kitchenLSize : undefined,
+        kitchenLSize: isKitchenBody && kitchenLSize !== "その他" ? kitchenLSize : undefined,
         kitchenWallCabinet: isKitchenBody ? kitchenWallCabinet : undefined,
         kitchenWallCabinetHeight: isKitchenBody ? kitchenWallCabinetHeight : undefined,
         kitchenDishwasherExisting: isKitchenBody ? kitchenDishwasherExisting : undefined,
@@ -1412,6 +1444,8 @@ export function WorkDetailScreen() {
       yoshitsuAmidoColor: showYoshitsuAmidoColor ? yoshitsuAmidoColor : undefined,
       // 全体項目：給湯器用
       kyutoukiHinban: showZentaiKyutoukiHinban ? kyutoukiHinban : undefined,
+      intercomAutoLock: isZentaiIntercom ? intercomAutoLock : undefined,
+      intercomDetail: isZentaiIntercom ? intercomDetail : undefined,
       // 和室用
       washitsuYoushitsuTatamiMm: showWashitsuYoushitsuTatamiMm ? washitsuYoushitsuTatamiMm : undefined,
       washitsuShojiRailFinish: showWashitsuShojiRailFinish ? washitsuShojiRailFinish : undefined,
@@ -1611,6 +1645,11 @@ export function WorkDetailScreen() {
       ldkTateguDansa: isLdkTategu ? ldkTateguDansa : undefined,
       ldkTateguDansaKubun: isLdkTategu ? ldkTateguDansaKubun : undefined,
       ldkTateguDansaCustomMm: isLdkTategu ? ldkTateguDansaCustomMm : undefined,
+      ldkTateguKagi: isLdkTategu ? ldkTateguKagi : undefined,
+      ldkTateguFloorMikiri: isLdkTategu ? ldkTateguFloorMikiri : undefined,
+      ldkTateguFloorMikiriType: isLdkTategu && ldkTateguFloorMikiri === "yes" ? ldkTateguFloorMikiriType : undefined,
+      ldkTateguFloorMikiriSize: isLdkTategu && ldkTateguFloorMikiri === "yes" ? ldkTateguFloorMikiriSize : undefined,
+      ldkTateguFloorMikiriImage: isLdkTategu && ldkTateguFloorMikiri === "yes" ? ldkTateguFloorMikiriImage : undefined,
       ldkTateguSpec: showLdkTateguChange ? ldkTateguSpec : undefined,
       ldkKatabiraki_w: showLdkTateguChange ? ldkKatabiraki_w : undefined,
       ldkKatabiraki_h: showLdkTateguChange ? ldkKatabiraki_h : undefined,
@@ -1653,6 +1692,10 @@ export function WorkDetailScreen() {
       ldkNimaiKatahiki_h_custom: showLdkTateguChange ? ldkNimaiKatahiki_h_custom : undefined,
       ldkNimaiKatahiki_hikite: showLdkTateguChange ? ldkNimaiKatahiki_hikite : undefined,
       ldkNimaiKatahiki_hikite_photo: showLdkTateguChange ? ldkNimaiKatahiki_hikite_photo : undefined,
+      ldkOutsetKatahikiKagi: showLdkTateguChange && ldkTateguSpec === "アウトセット片引き" ? ldkOutsetKatahikiKagi : undefined,
+      ldkOutsetKatahikiHikite: showLdkTateguChange && ldkTateguSpec === "アウトセット片引き" ? ldkOutsetKatahikiHikite : undefined,
+      ldkOutsetKatahikiRailWidth: showLdkTateguChange && ldkTateguSpec === "アウトセット片引き" ? ldkOutsetKatahikiRailWidth : undefined,
+      ldkOutsetKatahikiCh: showLdkTateguChange && ldkTateguSpec === "アウトセット片引き" ? ldkOutsetKatahikiCh : undefined,
       // 洋室 床
       yoshitsuFloorKumi: showYoshitsuFloorKumi ? yoshitsuFloorKumi : undefined,
       yoshitsuFloorPhoto: showYoshitsuFloorKumi ? yoshitsuFloorPhoto : undefined,
@@ -1670,6 +1713,11 @@ export function WorkDetailScreen() {
       yoshitsuTateguDansa: isYoshitsuTategu ? yoshitsuTateguDansa : undefined,
       yoshitsuTateguDansaKubun: isYoshitsuTategu ? yoshitsuTateguDansaKubun : undefined,
       yoshitsuTateguDansaCustomMm: isYoshitsuTategu ? yoshitsuTateguDansaCustomMm : undefined,
+      yoshitsuTateguKagi: isYoshitsuTategu ? yoshitsuTateguKagi : undefined,
+      yoshitsuTateguFloorMikiri: isYoshitsuTategu ? yoshitsuTateguFloorMikiri : undefined,
+      yoshitsuTateguFloorMikiriType: isYoshitsuTategu && yoshitsuTateguFloorMikiri === "yes" ? yoshitsuTateguFloorMikiriType : undefined,
+      yoshitsuTateguFloorMikiriSize: isYoshitsuTategu && yoshitsuTateguFloorMikiri === "yes" ? yoshitsuTateguFloorMikiriSize : undefined,
+      yoshitsuTateguFloorMikiriImage: isYoshitsuTategu && yoshitsuTateguFloorMikiri === "yes" ? yoshitsuTateguFloorMikiriImage : undefined,
       yoshitsuTateguSpec: showYoshitsuTateguChange ? yoshitsuTateguSpec : undefined,
       yoshitsuKatabiraki_w: showYoshitsuTateguChange ? yoshitsuKatabiraki_w : undefined,
       yoshitsuKatabiraki_h: showYoshitsuTateguChange ? yoshitsuKatabiraki_h : undefined,
@@ -1712,6 +1760,10 @@ export function WorkDetailScreen() {
       yoshitsuNimaiKatahiki_h_custom: showYoshitsuTateguChange ? yoshitsuNimaiKatahiki_h_custom : undefined,
       yoshitsuNimaiKatahiki_hikite: showYoshitsuTateguChange ? yoshitsuNimaiKatahiki_hikite : undefined,
       yoshitsuNimaiKatahiki_hikite_photo: showYoshitsuTateguChange ? yoshitsuNimaiKatahiki_hikite_photo : undefined,
+      yoshitsuOutsetKatahikiKagi: showYoshitsuTateguChange && yoshitsuTateguSpec === "アウトセット片引き" ? yoshitsuOutsetKatahikiKagi : undefined,
+      yoshitsuOutsetKatahikiHikite: showYoshitsuTateguChange && yoshitsuTateguSpec === "アウトセット片引き" ? yoshitsuOutsetKatahikiHikite : undefined,
+      yoshitsuOutsetKatahikiRailWidth: showYoshitsuTateguChange && yoshitsuTateguSpec === "アウトセット片引き" ? yoshitsuOutsetKatahikiRailWidth : undefined,
+      yoshitsuOutsetKatahikiCh: showYoshitsuTateguChange && yoshitsuTateguSpec === "アウトセット片引き" ? yoshitsuOutsetKatahikiCh : undefined,
       // コンセント・スイッチプレート
       concentSwitchType: showConcentSwitchType ? concentSwitchType : undefined,
       concentSwitchQuantities: showConcentSwitchType ? concentSwitchQuantities : undefined,
@@ -3087,6 +3139,55 @@ export function WorkDetailScreen() {
               placeholder="品番を入力"
               className="w-full border border-input rounded-lg px-3 py-2.5 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
+          </div>
+        )}
+
+        {isZentaiIntercom && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground block">オートロック</label>
+              <div className="flex flex-wrap gap-2">
+                {["有", "無"].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      const nextValue = intercomAutoLock === value ? "" : value;
+                      setIntercomAutoLock(nextValue);
+                      setIntercomDetail("");
+                    }}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      intercomAutoLock === value
+                        ? "bg-primary text-primary-foreground"
+                        : "border border-input text-foreground hover:bg-accent"
+                    }`}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {intercomAutoLock && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground block">内容</label>
+                <div className="flex flex-wrap gap-2">
+                  {(intercomAutoLock === "有" ? ["移設有", "移設無"] : ["交換", "既存残し"]).map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setIntercomDetail(intercomDetail === value ? "" : value)}
+                      className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        intercomDetail === value
+                          ? "bg-primary text-primary-foreground"
+                          : "border border-input text-foreground hover:bg-accent"
+                      }`}
+                    >
+                      {value}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -4816,7 +4917,7 @@ export function WorkDetailScreen() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground block">仕様選択</label>
               <div className="flex flex-wrap gap-2">
-                {["片開き", "片引き", "2枚引き違い戸", "2枚片引き", "3枚引き違い戸", "3枚片引き"].map((spec) => (
+                {DEFAULT_TATEGU_SPECS.map((spec) => (
                   <SpecImageButton
                     key={spec}
                     label={spec}
@@ -4838,6 +4939,11 @@ export function WorkDetailScreen() {
                 dansa={ldkTateguDansa} setDansa={setLdkTateguDansa}
                 dansaKubun={ldkTateguDansaKubun} setDansaKubun={setLdkTateguDansaKubun}
                 dansaCustomMm={ldkTateguDansaCustomMm} setDansaCustomMm={setLdkTateguDansaCustomMm}
+                kagi={ldkTateguKagi} setKagi={setLdkTateguKagi}
+                floorMikiri={ldkTateguFloorMikiri} setFloorMikiri={setLdkTateguFloorMikiri}
+                floorMikiriType={ldkTateguFloorMikiriType} setFloorMikiriType={setLdkTateguFloorMikiriType}
+                floorMikiriSize={ldkTateguFloorMikiriSize} setFloorMikiriSize={setLdkTateguFloorMikiriSize}
+                floorMikiriImage={ldkTateguFloorMikiriImage} setFloorMikiriImage={setLdkTateguFloorMikiriImage}
                 katabiraki_w={ldkKatabiraki_w} setKatabiraki_w={setLdkKatabiraki_w}
                 katabiraki_h={ldkKatabiraki_h} setKatabiraki_h={setLdkKatabiraki_h}
                 katabiraki_mikomi={ldkKatabiraki_mikomi} setKatabiraki_mikomi={setLdkKatabiraki_mikomi}
@@ -4890,6 +4996,10 @@ export function WorkDetailScreen() {
                 nimai_kata_h_custom={ldkNimaiKatahiki_h_custom} setNimai_kata_h_custom={setLdkNimaiKatahiki_h_custom}
                 nimai_kata_hikite={ldkNimaiKatahiki_hikite} setNimai_kata_hikite={setLdkNimaiKatahiki_hikite}
                 nimai_kata_hikite_photo={ldkNimaiKatahiki_hikite_photo} setNimai_kata_hikite_photo={setLdkNimaiKatahiki_hikite_photo}
+                outset_kagi={ldkOutsetKatahikiKagi} setOutset_kagi={setLdkOutsetKatahikiKagi}
+                outset_hikite={ldkOutsetKatahikiHikite} setOutset_hikite={setLdkOutsetKatahikiHikite}
+                outset_rail_width={ldkOutsetKatahikiRailWidth} setOutset_rail_width={setLdkOutsetKatahikiRailWidth}
+                outset_ch={ldkOutsetKatahikiCh} setOutset_ch={setLdkOutsetKatahikiCh}
               />
             )}
           </div>
@@ -4944,6 +5054,18 @@ export function WorkDetailScreen() {
                 </div>
               )}
             </div>
+            <TateguAccessoryControls
+              kagi={ldkTateguKagi}
+              setKagi={setLdkTateguKagi}
+              floorMikiri={ldkTateguFloorMikiri}
+              setFloorMikiri={setLdkTateguFloorMikiri}
+              floorMikiriType={ldkTateguFloorMikiriType}
+              setFloorMikiriType={setLdkTateguFloorMikiriType}
+              floorMikiriSize={ldkTateguFloorMikiriSize}
+              setFloorMikiriSize={setLdkTateguFloorMikiriSize}
+              floorMikiriImage={ldkTateguFloorMikiriImage}
+              setFloorMikiriImage={setLdkTateguFloorMikiriImage}
+            />
           </div>
         )}
 
@@ -5101,7 +5223,7 @@ export function WorkDetailScreen() {
             <div className="space-y-2">
               <label className="text-sm font-medium text-foreground block">仕様選択</label>
               <div className="flex flex-wrap gap-2">
-                {["片開き", "片引き", "2枚引き違い戸", "2枚片引き", "3枚引き違い戸", "3枚片引き"].map((spec) => (
+                {currentTateguSpecs.map((spec) => (
                   <SpecImageButton
                     key={spec}
                     label={spec}
@@ -5123,6 +5245,11 @@ export function WorkDetailScreen() {
                 dansa={yoshitsuTateguDansa} setDansa={setYoshitsuTateguDansa}
                 dansaKubun={yoshitsuTateguDansaKubun} setDansaKubun={setYoshitsuTateguDansaKubun}
                 dansaCustomMm={yoshitsuTateguDansaCustomMm} setDansaCustomMm={setYoshitsuTateguDansaCustomMm}
+                kagi={yoshitsuTateguKagi} setKagi={setYoshitsuTateguKagi}
+                floorMikiri={yoshitsuTateguFloorMikiri} setFloorMikiri={setYoshitsuTateguFloorMikiri}
+                floorMikiriType={yoshitsuTateguFloorMikiriType} setFloorMikiriType={setYoshitsuTateguFloorMikiriType}
+                floorMikiriSize={yoshitsuTateguFloorMikiriSize} setFloorMikiriSize={setYoshitsuTateguFloorMikiriSize}
+                floorMikiriImage={yoshitsuTateguFloorMikiriImage} setFloorMikiriImage={setYoshitsuTateguFloorMikiriImage}
                 katabiraki_w={yoshitsuKatabiraki_w} setKatabiraki_w={setYoshitsuKatabiraki_w}
                 katabiraki_h={yoshitsuKatabiraki_h} setKatabiraki_h={setYoshitsuKatabiraki_h}
                 katabiraki_mikomi={yoshitsuKatabiraki_mikomi} setKatabiraki_mikomi={setYoshitsuKatabiraki_mikomi}
@@ -5175,6 +5302,10 @@ export function WorkDetailScreen() {
                 nimai_kata_h_custom={yoshitsuNimaiKatahiki_h_custom} setNimai_kata_h_custom={setYoshitsuNimaiKatahiki_h_custom}
                 nimai_kata_hikite={yoshitsuNimaiKatahiki_hikite} setNimai_kata_hikite={setYoshitsuNimaiKatahiki_hikite}
                 nimai_kata_hikite_photo={yoshitsuNimaiKatahiki_hikite_photo} setNimai_kata_hikite_photo={setYoshitsuNimaiKatahiki_hikite_photo}
+                outset_kagi={yoshitsuOutsetKatahikiKagi} setOutset_kagi={setYoshitsuOutsetKatahikiKagi}
+                outset_hikite={yoshitsuOutsetKatahikiHikite} setOutset_hikite={setYoshitsuOutsetKatahikiHikite}
+                outset_rail_width={yoshitsuOutsetKatahikiRailWidth} setOutset_rail_width={setYoshitsuOutsetKatahikiRailWidth}
+                outset_ch={yoshitsuOutsetKatahikiCh} setOutset_ch={setYoshitsuOutsetKatahikiCh}
               />
             )}
           </div>
@@ -5229,6 +5360,18 @@ export function WorkDetailScreen() {
                 </div>
               )}
             </div>
+            <TateguAccessoryControls
+              kagi={yoshitsuTateguKagi}
+              setKagi={setYoshitsuTateguKagi}
+              floorMikiri={yoshitsuTateguFloorMikiri}
+              setFloorMikiri={setYoshitsuTateguFloorMikiri}
+              floorMikiriType={yoshitsuTateguFloorMikiriType}
+              setFloorMikiriType={setYoshitsuTateguFloorMikiriType}
+              floorMikiriSize={yoshitsuTateguFloorMikiriSize}
+              setFloorMikiriSize={setYoshitsuTateguFloorMikiriSize}
+              floorMikiriImage={yoshitsuTateguFloorMikiriImage}
+              setFloorMikiriImage={setYoshitsuTateguFloorMikiriImage}
+            />
           </div>
         )}
 

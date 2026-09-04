@@ -1,10 +1,18 @@
-import { AppState, SelectedWorkItem, RoomCountSettings, LoanCalc, BottomTab } from "./types";
+import { AppState, SelectedWorkItem, RoomCountSettings, LoanCalc, ProjectStatus, SavedEstimateProject } from "./types";
 import { generateRooms } from "./config";
 
 const STORAGE_KEY = "estimate_app_state";
+const PROJECTS_STORAGE_KEY = "estimate_projects";
+export const PROJECT_LIST_STEP = 7;
 
 export function initialState(): AppState {
+  return { ...newEstimateState(), currentStep: PROJECT_LIST_STEP };
+}
+
+export function newEstimateState(): AppState {
   return {
+    activeProjectId: null,
+    activeProjectStatus: null,
     currentStep: 0,
     projectName: "",
     customerName: "",
@@ -40,6 +48,60 @@ export function load(): AppState | null {
 export function clear(): void {
   if (typeof window === "undefined") return;
   localStorage.removeItem(STORAGE_KEY);
+}
+
+export function loadProjects(): SavedEstimateProject[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const s = localStorage.getItem(PROJECTS_STORAGE_KEY);
+    return s ? JSON.parse(s) : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveProjects(projects: SavedEstimateProject[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(projects));
+  } catch { /* ignore */ }
+}
+
+export function projectSnapshot(state: AppState, projectId = state.activeProjectId, status = state.activeProjectStatus): AppState {
+  return {
+    ...state,
+    activeProjectId: projectId,
+    activeProjectStatus: status,
+    editingWorkItem: null,
+    activeBottomTab: null,
+  };
+}
+
+export function isBlankEstimate(state: AppState): boolean {
+  const current = { ...projectSnapshot(state, null, null), currentStep: 0 };
+  return JSON.stringify(current) === JSON.stringify(projectSnapshot(newEstimateState(), null, null));
+}
+
+export function makeProjectRecord(state: AppState, status: ProjectStatus, now = new Date()): SavedEstimateProject {
+  const id = state.activeProjectId ?? `project-${now.getTime()}-${Math.random().toString(36).slice(2, 9)}`;
+  const existing = loadProjects().find((project) => project.id === id);
+  const snapshot = projectSnapshot(state, id, status);
+  return {
+    id,
+    name: snapshot.projectName.trim() || "名称未設定",
+    status,
+    createdAt: existing?.createdAt ?? now.toISOString(),
+    updatedAt: now.toISOString(),
+    state: snapshot,
+  };
+}
+
+export function upsertProject(projects: SavedEstimateProject[], project: SavedEstimateProject): SavedEstimateProject[] {
+  const existingIndex = projects.findIndex((item) => item.id === project.id);
+  if (existingIndex === -1) return [project, ...projects];
+  const next = [...projects];
+  next[existingIndex] = project;
+  return next.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 }
 
 // ========== Derived calculations ==========
@@ -130,4 +192,27 @@ export function updateWorkItem(state: AppState, updated: SelectedWorkItem): AppS
       return i;
     }),
   };
+}
+
+export function copyRoomWorkItems(state: AppState, sourceRoomKey: string, targetRoomKey: string): AppState {
+  const sourceItems = state.selectedWorkItems.filter((i) => i.roomKey === sourceRoomKey);
+  const targetRoom = state.generatedRooms.find((room) => room.roomKey === targetRoomKey);
+  if (!targetRoom || sourceItems.length === 0 || sourceRoomKey === targetRoomKey) return state;
+
+  const targetRoomLabel = targetRoom.label;
+  const copiedItems = sourceItems.map((item, index) => ({
+    ...item,
+    roomKey: targetRoom.roomKey,
+    roomLabel: targetRoomLabel,
+    instanceId: `${item.baseWorkItemId || item.workItemId}-${targetRoom.roomKey}-${Date.now()}-${index}-${Math.random().toString(36).substr(2, 9)}`,
+  }));
+
+  const firstTargetIndex = state.selectedWorkItems.findIndex((item) => item.roomKey === targetRoomKey);
+  if (firstTargetIndex === -1) {
+    return { ...state, selectedWorkItems: [...state.selectedWorkItems, ...copiedItems] };
+  }
+
+  const nextItems = state.selectedWorkItems.filter((item) => item.roomKey !== targetRoomKey);
+  nextItems.splice(firstTargetIndex, 0, ...copiedItems);
+  return { ...state, selectedWorkItems: nextItems };
 }

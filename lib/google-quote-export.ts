@@ -185,7 +185,7 @@ function buildDetailRows(state: AppState) {
   rows.push([QUOTE_PREFIX]);
   rows.push([CREATED_AT_LABEL, formatDateTime(new Date())]);
   rows.push([PROJECT_LABEL, state.projectName || ""]);
-  rows.push([CUSTOMER_LABEL, state.customerName || ""]);
+  rows.push([CUSTOMER_LABEL, ""]);
   rows.push([]);
 
   for (const group of groupItems(state.selectedWorkItems)) {

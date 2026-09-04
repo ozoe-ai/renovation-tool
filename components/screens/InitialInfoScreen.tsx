@@ -4,7 +4,7 @@ import React from "react";
 import { useApp } from "@/lib/WizardContext";
 
 export function InitialInfoScreen() {
-  const { state, setProjectName, setCustomerName, setStep } = useApp();
+  const { state, setProjectName, setStep } = useApp();
 
   return (
     <div className="flex flex-col items-center justify-center min-h-[calc(100vh-52px)] p-6">
@@ -22,16 +22,6 @@ export function InitialInfoScreen() {
               value={state.projectName}
               onChange={(e) => setProjectName(e.target.value)}
               placeholder="例：山田邸リフォーム"
-              className="w-full border border-input rounded-lg px-3 py-2.5 text-sm bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium text-foreground block mb-1.5">顧客名</label>
-            <input
-              type="text"
-              value={state.customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="例：山田太郎"
               className="w-full border border-input rounded-lg px-3 py-2.5 text-sm bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>

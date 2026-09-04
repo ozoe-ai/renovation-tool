@@ -40,6 +40,16 @@ const ZENTAI_ITEMS: WorkItemDef[] = [
   { id: "zentai_hanbantai", roomType: "ZENTAI", title: "分電盤", options: keepChange, defaultUnit: "式", defaultQty: 1, defaultUnitPrice: 0 },
 ];
 
+ZENTAI_ITEMS.push({
+  id: "zentai_intercom",
+  roomType: "ZENTAI",
+  title: "インターホン",
+  options: [{ value: "select", label: "選択" }],
+  defaultUnit: "式",
+  defaultQty: 1,
+  defaultUnitPrice: 0,
+});
+
 const GENKAN_ITEMS: WorkItemDef[] = [
   { id: "genkan_door", roomType: "GENKAN", title: "玄関扉", options: [{ value: "keep", label: "既存残し" }, { value: "sheet", label: "シート" }, { value: "paint", label: "塗装" }], defaultUnit: "式", defaultQty: 1, defaultUnitPrice: 0 },
   { id: "genkan_frame", roomType: "GENKAN", title: "玄関枠", options: [{ value: "keep", label: "既存残し" }, { value: "sheet", label: "シート" }, { value: "paint", label: "塗装" }], defaultUnit: "式", defaultQty: 1, defaultUnitPrice: 0 },

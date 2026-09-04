@@ -13,7 +13,7 @@ const instanceSuffix = (index: number) => {
 };
 
 export function RoomWorkScreen() {
-  const { state, selectRoom, setStep, setEditingWorkItem, getItemsForRoom, addWorkItem, removeWorkItem, updateWorkItem, reset } = useApp();
+  const { state, selectRoom, setStep, setEditingWorkItem, getItemsForRoom, addWorkItem, removeWorkItem, updateWorkItem, resetCurrentEstimate } = useApp();
   const { generatedRooms, selectedRoomKey } = state;
   const selectedRoom = generatedRooms.find((r) => r.roomKey === selectedRoomKey);
 
@@ -108,8 +108,8 @@ export function RoomWorkScreen() {
           <div className="flex gap-2">
             <button
               onClick={() => {
-                if (window.confirm("入力内容と選択内容をリセットします。よろしいですか？")) {
-                  reset();
+                if (window.confirm("現在入力している内容をすべてリセットしますか？")) {
+                  resetCurrentEstimate();
                 }
               }}
               className="text-xs px-3 py-1.5 rounded border border-input text-foreground hover:bg-accent transition-colors"
