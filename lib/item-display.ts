@@ -158,7 +158,7 @@ function isSelectionField(key: string, value: unknown) {
   const lower = key.toLowerCase();
   if (EXCLUDED_SELECTION_FIELDS.has(key)) return false;
   if (CALCULATION_FIELD_PATTERNS.some((pattern) => lower.includes(pattern))) return false;
-  if (!lower.includes("floormikiriimage") && (lower.includes("photo") || lower.includes("image") || lower.includes("photos"))) return false;
+  if (lower.includes("photo") || lower.includes("image") || lower.includes("photos")) return false;
   if (lower.includes("price") || lower.includes("subtotal")) return false;
   if (value === undefined || value === null || value === "") return false;
   if (typeof value === "number" && !Number.isInteger(value)) return false;

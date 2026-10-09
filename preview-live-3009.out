@@ -1,0 +1,39 @@
+
+> my-project@0.1.0 dev
+> next dev -p 3009
+
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3009
+- Network:       http://192.168.1.124:3009
+- Environments: .env.local
+
+✓ Starting...
+✓ Ready in 23.3s
+○ Compiling / ...
+ GET / 200 in 984ms (compile: 48ms, render: 936ms)
+ GET / 200 in 250ms (compile: 30ms, render: 220ms)
+ GET / 200 in 2.1s (compile: 512ms, render: 1594ms)
+✓ Compiled in 5.6s
+✓ Compiled in 3.4s
+✓ Compiled in 2.1s
+✓ Compiled in 2.1s
+✓ Compiled in 1434ms
+✓ Compiled in 3s
+✓ Compiled in 1457ms
+ GET / 200 in 8.5s (compile: 6.7s, render: 1808ms)
+✓ Compiled in 1015ms
+ GET / 200 in 1680ms (compile: 951ms, render: 729ms)
+ GET / 200 in 1547ms (compile: 460ms, render: 1086ms)
+✓ Compiled in 1199ms
+✓ Compiled in 767ms
+✓ Compiled in 1160ms
+✓ Compiled in 859ms
+✓ Compiled in 1287ms
+✓ Compiled in 924ms
+✓ Compiled in 887ms
+✓ Compiled in 708ms
+✓ Compiled in 1163ms
+ GET / 200 in 11.5s (compile: 4.9s, render: 6.6s)
+ GET / 200 in 2.3s (compile: 1227ms, render: 1064ms)
+ POST /api/export-quote 200 in 22.8s (compile: 2.2s, render: 20.6s)
+ POST /api/export-quote 200 in 11.5s (compile: 230ms, render: 11.3s)
