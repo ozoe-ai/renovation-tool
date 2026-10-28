@@ -6,7 +6,6 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
-  signInAnonymously,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -14,7 +13,7 @@ import {
   type Unsubscribe,
   type User,
 } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, type Firestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -44,18 +43,21 @@ export function getFirebaseAuth(): Auth | null {
   return app ? getAuth(app) : null;
 }
 
+let firestore: Firestore | null = null;
 export function getFirestoreDb(): Firestore | null {
   const app = getFirebaseApp();
-  return app ? getFirestore(app) : null;
+  if (!app || typeof window === "undefined") return null;
+  firestore ??= initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  });
+  return firestore;
 }
 
 export async function getCurrentFirebaseUser(): Promise<User | null> {
   const auth = getFirebaseAuth();
   if (!auth) return null;
-  if (auth.currentUser) return auth.currentUser;
-  await setPersistence(auth, browserLocalPersistence);
-  const credential = await signInAnonymously(auth);
-  return credential.user;
+  await auth.authStateReady();
+  return auth.currentUser?.isAnonymous ? null : auth.currentUser;
 }
 
 export function onFirebaseUserChanged(callback: (user: User | null) => void): Unsubscribe {
@@ -69,7 +71,7 @@ export function onFirebaseUserChanged(callback: (user: User | null) => void): Un
 
 export async function signInWithGoogle(): Promise<User | null> {
   const auth = getFirebaseAuth();
-  if (!auth) return null;
+  if (!auth) throw new Error("Firebase設定がありません。");
   await setPersistence(auth, browserLocalPersistence);
   const credential = await signInWithPopup(auth, new GoogleAuthProvider());
   return credential.user;
@@ -77,7 +79,7 @@ export async function signInWithGoogle(): Promise<User | null> {
 
 export async function signInWithEmail(email: string, password: string): Promise<User | null> {
   const auth = getFirebaseAuth();
-  if (!auth) return null;
+  if (!auth) throw new Error("Firebase設定がありません。");
   await setPersistence(auth, browserLocalPersistence);
   const credential = await signInWithEmailAndPassword(auth, email, password);
   return credential.user;
@@ -85,7 +87,7 @@ export async function signInWithEmail(email: string, password: string): Promise<
 
 export async function createAccountWithEmail(email: string, password: string): Promise<User | null> {
   const auth = getFirebaseAuth();
-  if (!auth) return null;
+  if (!auth) throw new Error("Firebase設定がありません。");
   await setPersistence(auth, browserLocalPersistence);
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   return credential.user;

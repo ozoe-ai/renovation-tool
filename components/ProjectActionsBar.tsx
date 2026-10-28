@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useApp } from "@/lib/WizardContext";
 import { PROJECT_LIST_STEP } from "@/lib/store";
+import { AssigneeButtons } from "./AssigneeButtons";
 
 export function ProjectActionsBar() {
   const {
@@ -14,14 +15,20 @@ export function ProjectActionsBar() {
     state,
   } = useApp();
   const [showNewConfirm, setShowNewConfirm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showAssignees, setShowAssignees] = useState(false);
 
   if (state.currentStep === PROJECT_LIST_STEP) return null;
   const saveStatus = state.activeProjectStatus === "completed" ? "completed" : "draft";
   const saveLabel = state.activeProjectStatus === "completed" ? "上書き保存" : "下書き保存";
 
-  const handleDraftSave = () => {
-    saveProject(saveStatus);
-    window.alert(`${saveLabel}しました。`);
+  const handleDraftSave = async () => {
+    setSaving(true);
+    try {
+      await saveProject(saveStatus);
+      window.alert("端末に保存しました。共有先への同期状況は画面上部に表示されます。");
+    } catch (error) { window.alert(error instanceof Error ? error.message : "保存に失敗しました。"); }
+    finally { setSaving(false); }
   };
 
   const handleNewProject = () => {
@@ -50,6 +57,8 @@ export function ProjectActionsBar() {
             案件一覧
           </button>
           <div className="flex flex-wrap justify-end gap-2">
+            <button type="button" onClick={() => setShowAssignees(v => !v)} aria-expanded={showAssignees}
+              className="text-xs px-3 py-1.5 rounded border border-input hover:bg-accent">担当者（{state.assigneeIds?.length ?? 0}）</button>
             <button
               type="button"
               onClick={handleNewProject}
@@ -60,6 +69,7 @@ export function ProjectActionsBar() {
             <button
               type="button"
               onClick={handleDraftSave}
+              disabled={saving}
               className="text-xs px-3 py-1.5 rounded border border-input text-foreground hover:bg-accent transition-colors"
             >
               {saveLabel}
@@ -73,6 +83,7 @@ export function ProjectActionsBar() {
             </button>
           </div>
         </div>
+        {showAssignees && <div className="max-w-3xl mx-auto py-3"><AssigneeButtons /></div>}
       </div>
 
       {showNewConfirm && (
@@ -84,10 +95,15 @@ export function ProjectActionsBar() {
             <div className="space-y-2">
               <button
                 type="button"
-                onClick={() => {
-                  saveProject("draft");
-                  startNewProject();
-                  setShowNewConfirm(false);
+                disabled={saving}
+                onClick={async () => {
+                  setSaving(true);
+                  try {
+                    await saveProject("draft");
+                    startNewProject();
+                    setShowNewConfirm(false);
+                  } catch (error) { window.alert(error instanceof Error ? error.message : "保存に失敗しました。"); }
+                  finally { setSaving(false); }
                 }}
                 className="w-full py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
               >

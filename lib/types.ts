@@ -551,8 +551,17 @@ export type BottomTab = "content" | "loan" | "total";
 
 export type ProjectStatus = "draft" | "completed";
 
+export type StaffDepartment = "construction" | "sales";
+export interface StaffMember {
+  id: string;
+  name: string;
+  active: boolean;
+  department?: StaffDepartment;
+}
+
 /** Full app state */
 export interface AppState {
+  assigneeIds?: string[];
   activeProjectId: string | null;
   activeProjectStatus: ProjectStatus | null;
   currentStep: number;
@@ -579,6 +588,8 @@ export interface AppState {
 }
 
 export interface SavedEstimateProject {
+  clientSaveId?: string;
+  ownerId?: string;
   id: string;
   name: string;
   status: ProjectStatus;

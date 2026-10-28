@@ -2,6 +2,7 @@
 
 import React from "react";
 import { useApp } from "@/lib/WizardContext";
+import type { StaffDepartment } from "@/lib/types";
 
 const statusLabel = {
   draft: "下書き",
@@ -21,13 +22,19 @@ function formatDateTime(value: string) {
 }
 
 export function ProjectListScreen() {
-  const { hasUnsavedChanges, loadProject, projects, startNewProject } = useApp();
+  const { hasUnsavedChanges, loadProject, projects, startNewProject, staff, pendingIds, discardPending } = useApp();
   const [search, setSearch] = React.useState("");
+  const [department, setDepartment] = React.useState<StaffDepartment | "all">("all");
+  const [person, setPerson] = React.useState<string | null>(null);
   const filteredProjects = React.useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return projects;
-    return projects.filter((project) => project.name.toLowerCase().includes(query));
-  }, [projects, search]);
+    return projects.filter(project => {
+      const assigned = project.state.assigneeIds ?? [];
+      return (!query || project.name.toLowerCase().includes(query)) &&
+        (!person || assigned.includes(person)) &&
+        (department === "all" || assigned.some(id => staff.some(s => s.id === id && s.department === department)));
+    });
+  }, [projects, search, department, person, staff]);
 
   const handleLoadProject = (projectId: string) => {
     if (hasUnsavedChanges && !window.confirm("現在の編集内容が保存されていません。この案件を開きますか？")) {
@@ -60,6 +67,20 @@ export function ProjectListScreen() {
           </button>
         </div>
 
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2" aria-label="部署で絞り込み">
+            {([['all', '全件'], ['construction', '施工管理'], ['sales', '営業部']] as const).map(([id, label]) =>
+              <button key={id} type="button" aria-pressed={department === id} onClick={() => { setDepartment(id); setPerson(null); }}
+                className={`rounded-lg border px-4 py-2 text-sm ${department === id ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}>{label}</button>)}
+          </div>
+          <div className="flex flex-wrap gap-2" aria-label="担当者で絞り込み">
+            <button type="button" aria-pressed={!person} onClick={() => setPerson(null)} className={`rounded border px-3 py-1.5 text-sm ${!person ? 'bg-muted font-semibold' : ''}`}>担当者全員</button>
+            {staff.filter(s => (s.active || projects.some(p => p.state.assigneeIds?.includes(s.id))) && (department === 'all' || s.department === department)).map(s =>
+              <button type="button" key={s.id} aria-pressed={person === s.id} onClick={() => setPerson(person === s.id ? null : s.id)}
+                className={`rounded border px-3 py-1.5 text-sm ${person === s.id ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}`}>{s.name}{!s.active ? '（無効）' : ''}</button>)}
+          </div>
+          <p className="text-xs text-muted-foreground">{filteredProjects.length}件表示・複数担当の案件は各担当者から確認できます。担当未設定の案件は「全件」に表示されます。</p>
+        </div>
         {projects.length > 0 && (
           <input
             type="search"
@@ -84,6 +105,7 @@ export function ProjectListScreen() {
         ) : (
           <div className="space-y-2">
             {filteredProjects.map((project) => (
+              <div key={project.id} className="rounded-lg border border-border">
               <button
                 key={project.id}
                 type="button"
@@ -94,12 +116,18 @@ export function ProjectListScreen() {
                   <div className="min-w-0">
                     <p className="font-semibold text-foreground truncate">{project.name}</p>
                     <p className="text-xs text-muted-foreground mt-1">更新日時: {formatDateTime(project.updatedAt)}</p>
+                    <p className="text-xs text-muted-foreground mt-1">担当: {(project.state.assigneeIds ?? []).map(id => staff.find(s => s.id === id)?.name ?? "登録外の担当者").join("・") || "未設定"}</p>
+                    {pendingIds.includes(project.id) && <p className="text-xs font-medium mt-1">端末保存済み・未同期</p>}
                   </div>
                   <span className="shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
                     {statusLabel[project.status]}
                   </span>
                 </div>
               </button>
+              {pendingIds.includes(project.id) && <button type="button" className="px-4 pb-3 text-xs underline text-muted-foreground" onClick={() => {
+                if (window.confirm("この案件の端末内の未同期保存を破棄して、取得済みの共有版へ戻します。編集内容は失われます。よろしいですか？")) discardPending(project.id);
+              }}>未同期保存を破棄して共有版へ戻す</button>}
+              </div>
             ))}
             {filteredProjects.length === 0 && (
               <div className="rounded-lg border border-border p-6 text-center">

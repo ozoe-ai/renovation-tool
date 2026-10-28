@@ -79,7 +79,11 @@ export function FinalConfirmScreen() {
       }
 
       setSpreadsheetUrl(result?.spreadsheetUrl);
-      saveProject("completed", exportState);
+      try { await saveProject("completed", exportState); }
+      catch (error) {
+        setExportError(`見積書は作成されましたが、案件を端末へ保存できませんでした。${error instanceof Error ? error.message : ""}`);
+        return;
+      }
       setConfirmed(true);
     } catch {
       setExportError("見積書の作成に失敗しました。時間をおいて再度お試しください。");

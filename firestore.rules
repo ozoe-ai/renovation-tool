@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+    }
+    function activeStaff() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/staff_members/$(request.auth.uid))
+        && get(/databases/$(database)/documents/staff_members/$(request.auth.uid)).data.active == true;
+    }
+    function validProject(projectId) {
+      return request.resource.data.id == projectId
+        && request.resource.data.name is string
+        && request.resource.data.ownerId is string
+        && request.resource.data.status in ['draft', 'completed']
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string
+        && request.resource.data.state is map
+        && request.resource.data.state.activeProjectId == projectId
+        && request.resource.data.state.activeProjectStatus == request.resource.data.status
+        && request.resource.data.state.assigneeIds is list;
+    }
+    match /staff_members/{uid} {
+      // Members may check their own registration before they have been activated.
+      allow get: if signedIn() && (request.auth.uid == uid || activeStaff());
+      allow list: if activeStaff();
+      // Provisioning and deactivation are performed only by the administrator in Console.
+      allow write: if false;
+    }
+    match /estimate_projects/{projectId} {
+      allow read: if activeStaff();
+      allow create: if activeStaff() && validProject(projectId)
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update: if activeStaff() && validProject(projectId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if false;
+    }
+  }
+}

@@ -12,6 +12,7 @@ export function initialState(): AppState {
 export function newEstimateState(): AppState {
   return {
     activeProjectId: null,
+    assigneeIds: [],
     activeProjectStatus: null,
     currentStep: 0,
     projectName: "",

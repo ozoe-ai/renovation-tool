@@ -1,59 +1,63 @@
-# Firebase Firestore setup
+# Firebase社内共有の設定・確認手順
 
-このアプリはFirebase設定が入っている場合、Firestoreに案件を保存します。未設定の場合は従来通りブラウザのlocalStorageに保存します。
+## 今回の構成
 
-## 1. Firebaseプロジェクトを作成
+- プロジェクトID: renovation-tool、データベース: (default)
+- 共有案件: estimate_projects/{案件ID}。有効な社内メンバー全員で閲覧・編集します。
+- 社員情報: staff_members/{AuthenticationのUID}
+- ログインはGoogleまたはメール/パスワード。端末のブラウザに保持します。匿名認証は使用しません。
+- 担当者は複数選択ボタン。state.assigneeIds に社員ドキュメントIDの配列を保存します。
+- 一覧は全件/施工管理/営業部、および担当者名のボタンで絞り込みます。
+- 部署が未設定の社員も選択可能です。既存の担当未設定案件は全件に表示されます。
 
-1. Firebase Consoleでプロジェクトを作成します。
-2. Webアプリを追加します。
-3. 表示されたFirebase configの値を `.env.local` に設定します。
+## 管理画面で行う作業（この順序）
 
-## 2. Authenticationを有効化
+1. 現在公開中のFirestoreルールを控えてください。既存案件の移動・削除は不要です。
+2. Authentication → ログイン方法でGoogleまたはメール/パスワードを有効化します。
+   Googleを使う場合はサポートメールを設定し、設定 → 承認済みドメインで公開サイトのホスト名を登録します。
+   開発用localhostも必要な場合のみ登録します。
+3. 各社員のアカウントを用意します。Googleは本人の初回ログイン後、メールは管理画面のユーザー追加でも登録できます。
+   新規登録だけでは共有案件へアクセスできません。
+4. Authentication → ユーザーで各社員のUIDを確認します。
+5. Firestore → データ → staff_membersで、UIDと同じドキュメントIDを作成/確認します。
+   - name: 氏名（string）
+   - active: true（boolean。文字列の"true"ではありません）
+   - department: construction（施工管理）または sales（営業部）（string）
+   既存の「尾添」のドキュメントもUIDの一致を確認し、departmentを追加してください。
+   社員が増えた場合も同じ操作で追加できます。人数の上限はコードに固定していません。
+   退職・利用停止時はactiveをfalseにします。自己登録・自己有効化はルールで禁止します。
+6. Firestore → ルールで、このフォルダのfirestore.rulesの内容を反映します。
+   Rules Playgroundで有効メンバーの読み取り/作成/更新が許可されることと、未認証・未登録・無効メンバーが拒否されることを確認してから「公開」します。
+   staff_membersへのクライアント書き込みと案件削除は禁止です。
+   ローカルファイルを作成しただけでは、公開中のルールは変更されません。
+7. 実際の公開環境のビルド時に、.env.exampleにあるNEXT_PUBLIC_FIREBASE_の6項目を設定して再ビルド・公開します。
+   .env.localはGitの対象外です。サーバー起動後に環境変数だけを変更しても、ブラウザ用設定は変わりません。
+   Firebase HostingへのWebアプリの紐付けだけで、別の公開先へ設定が反映されることはありません。
 
-Firebase Consoleの Authentication > ログイン方法 で、次のプロバイダを有効化します。
+## 保存と通信断
 
-- 匿名
-- Google
-- メール/パスワード
+- 社内管理端末で使用してください。ログイン状態、取得済み案件・社員情報はブラウザに残ります。
+- 編集内容と未同期保存はUIDごとのlocalStorageへ保存します。保存容量不足はエラー表示します。
+- 従来のestimate_projects/estimate_app_stateのlocalStorageは削除せず、共有先へ自動転送しません。
+- 「端末保存済み・未同期」は共有完了ではありません。オンライン復帰・再ログイン・「再試行」で同期します。
+- Firestore読み取りは永続キャッシュを使用します。オンライン時は共有更新を受信します。
+- 同期時にトランザクションで保存前のupdatedAtを比較します。他の端末が先に更新した場合は上書きしません。
+- 競合時は端末内の内容を確認し、必要な内容を控えてから一覧の「未同期保存を破棄して共有版へ戻す」を使用してください。
+  同じ案件を複数ブラウザタブで同時編集せず、1端末1タブで作業してください。
+- 通信断中は既に開いている画面と取得済み案件で入力・端末保存できます。
+  サイト本体の完全なオフライン起動を保証するService Workerは今回追加していません。
+  初回ログイン、未取得案件の取得、見積書のGoogle Drive出力には通信が必要です。
+- セッション失効・ブラウザデータ削除などでは再ログインが必要です。「一度だけ」は永久の保証ではありません。
+- 無効化された社員はサーバーの読み書きを拒否されます。オフライン中の端末内データを遠隔消去する機能はありません。
 
-匿名は未ログイン時の一時保存に使います。Googleまたはメールでログインすると、同じアカウントで複数デバイスから同じ案件一覧を開けます。
+## 公開後の受け入れ確認
 
-## 3. Firestore Databaseを作成
+1. 有効メンバーAで初回ログインし、再読込してログインが保持されること。
+2. A/B両方で既存の最上位案件が見え、複数担当者を保存して両端末に反映されること。
+3. 全件/施工管理/営業部と個人の絞り込みを確認すること。担当未設定は全件に残ること。
+4. Aで画面を開いたまま通信を切り、編集・保存して未同期表示を確認すること。復帰後にBで反映を確認すること。
+5. A/Bで同じ案件を開き、Bを保存後にAから保存して競合エラーと未同期内容の保持を確認すること。
+6. 未登録/active:falseのアカウントで共有データへアクセスできないこと。自己有効化も拒否されること。
+7. 権限拒否・保存容量不足・通信エラーで共有成功を表示しないこと。
 
-Firestore Databaseを作成し、ルールを次の内容にします。
-
-```txt
-rules_version = '2';
-
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{userId}/estimate_projects/{projectId} {
-      allow read, write: if request.auth != null
-        && request.auth.uid == userId;
-    }
-  }
-}
-```
-
-## 4. 環境変数を設定
-
-`.env.local` にFirebase configを追加します。
-
-```txt
-NEXT_PUBLIC_FIREBASE_API_KEY=
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
-NEXT_PUBLIC_FIREBASE_APP_ID=
-```
-
-変更後は開発サーバーを再起動してください。
-
-## 保存の流れ
-
-1. 案件を作成します。
-2. 「下書き保存」または見積完了時の保存処理を実行します。
-3. アプリはlocalStorageへ即時保存します。
-4. ログイン済みの場合は `users/{uid}/estimate_projects` に保存します。
-5. 起動時にFirestoreとlocalStorageの案件を結合し、更新日時が新しいものを優先します。
+本番ルールの公開、社員の登録、サイトの再公開、実アカウントでの読み書き検証は別途必要です。

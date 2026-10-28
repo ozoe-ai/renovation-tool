@@ -13,6 +13,7 @@ export function AuthControls() {
     loginWithGoogle,
     logout,
     registerWithEmail,
+    memberActive, syncError, fromCache, pendingIds, retrySync,
   } = useApp();
   const [showEmailForm, setShowEmailForm] = useState(false);
   const [email, setEmail] = useState("");
@@ -41,8 +42,8 @@ export function AuthControls() {
               {!authReady
                 ? "ログイン状態を確認中"
                 : isSignedIn
-                  ? `${displayName} で同期中`
-                  : "未ログイン: この端末だけの一時ユーザーで保存中"}
+                  ? `${displayName || "社内アカウント"}：${memberActive ? "社内共有" : "メンバー確認中"}`
+                  : "初回ログインが必要です（次回から保持）"}
             </span>
           </div>
 
@@ -116,6 +117,11 @@ export function AuthControls() {
         )}
 
         {authError && <p className="text-xs font-medium text-destructive">{authError}</p>}
+        {isSignedIn && memberActive && <p role="status" className="text-xs text-muted-foreground">
+          {pendingIds.length ? `端末保存済み・未同期 ${pendingIds.length}件（接続時に同期）` : fromCache ? "端末内のデータを表示中・共有サーバーへの接続待ち" : "共有データを取得済み"}
+        </p>}
+        {syncError && <div role="alert" className="text-xs text-destructive space-x-2"><span>{syncError}</span>
+          <button type="button" onClick={retrySync} className="underline">再試行</button></div>}
       </div>
     </div>
   );
