@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { useApp } from "@/lib/WizardContext";
 import { InitialInfoScreen } from "./screens/InitialInfoScreen";
 import { MultiplierScreen } from "./screens/MultiplierScreen";
@@ -14,10 +14,10 @@ import { ProjectActionsBar } from "./ProjectActionsBar";
 import { ProjectListScreen } from "./screens/ProjectListScreen";
 import { PROJECT_LIST_STEP } from "@/lib/store";
 import { AuthControls } from "./AuthControls";
+import { EmailLoginForm } from "./EmailLoginForm";
 
 export function WizardContainer() {
   const { state, authReady, authUser, memberActive, retrySync } = useApp();
-  const [showEmailForm, setShowEmailForm] = useState(false);
 
   const screens = [
     <InitialInfoScreen key="initial-info" />,      // step 0
@@ -32,23 +32,11 @@ export function WizardContainer() {
 
   return (
     <div className="min-h-screen bg-background pb-[52px]">
-      <AuthControls showEmailForm={showEmailForm} />
+      <AuthControls />
       {(!authReady || !authUser || !memberActive) ? <div className="mx-auto max-w-md p-6 space-y-3">
         <p>{!authReady ? "ログイン状態を確認中です。" : !authUser ? "初回は社内アカウントでログインしてください。この端末にログイン状態を保持します。" : "社内メンバーの登録を確認しています。未登録の場合は管理者へお問い合わせください。"}</p>
         <p className="text-sm text-muted-foreground">会社管理の端末で使用してください。取得済み案件と編集内容をこのブラウザに保存します。</p>
-        {(!authUser || authUser.isAnonymous) && (
-          <div className="pt-3">
-            <button
-              type="button"
-              onClick={() => setShowEmailForm((value) => !value)}
-              className="inline-flex h-[60px] w-[280px] max-w-full items-center justify-center rounded bg-black px-5 text-base font-semibold text-white"
-              aria-expanded={showEmailForm}
-              aria-controls="email-login-form"
-            >
-              ログイン
-            </button>
-          </div>
-        )}
+        {(!authUser || authUser.isAnonymous) && <EmailLoginForm />}
         {authUser && <><p className="text-xs break-all">登録用UID: {authUser.uid}</p><button type="button" onClick={retrySync} className="rounded border px-3 py-2">再確認</button></>}
       </div> : <>
       <ProjectActionsBar />

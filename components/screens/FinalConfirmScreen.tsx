@@ -14,6 +14,7 @@ export function FinalConfirmScreen() {
     setProjectName,
     setMultiplier,
     saveProject,
+    staff,
   } = useApp();
 
   const [errors, setErrors] = useState<string[]>([]);
@@ -65,6 +66,7 @@ export function FinalConfirmScreen() {
         projectName: localProject.trim(),
         customerName: "",
         multiplier: !isNaN(m) && m > 0 ? m : null,
+        assigneeNames: Object.fromEntries((state.assigneeIds ?? []).map(id => [id, state.assigneeNames?.[id] || staff.find(member => member.id === id)?.name || ""])),
       };
       const response = await fetch("/api/export-quote", {
         method: "POST",
@@ -74,7 +76,7 @@ export function FinalConfirmScreen() {
       const result = await response.json().catch(() => null);
 
       if (!response.ok) {
-        setExportError("見積書の作成に失敗しました。時間をおいて再度お試しください。");
+        setExportError(result?.error || "見積書の作成に失敗しました。時間をおいて再度お試しください。");
         return;
       }
 

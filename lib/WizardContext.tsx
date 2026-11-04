@@ -71,7 +71,7 @@ interface AppContextType {
   // Projects
   saveProject: (status: ProjectStatus, stateOverride?: AppState) => Promise<void>;
   loadProject: (projectId: string) => void;
-  startNewProject: () => void;
+  startNewProject: (assigneeId?: string) => void;
   resetCurrentEstimate: () => void;
   loginWithGoogle: () => Promise<void>;
   loginWithEmail: (email: string, password: string) => Promise<void>;
@@ -108,6 +108,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const cacheRef = React.useRef<SharedCache>({ projects: [], staff: [], pending: {}, draft: null });
   const uidRef = React.useRef<string | null>(null);
   const baseRef = React.useRef<string | null>(null);
+  const newProjectAssignee = React.useRef<string | null>(null);
   const flushing = React.useRef(false);
   const flushRequested = React.useRef(false);
 
@@ -133,6 +134,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (stopped) return;
         window.clearTimeout(timer);
         const uid = user && !user.isAnonymous ? user.uid : null;
+        newProjectAssignee.current = null;
         uidRef.current = uid;
         setMemberActive(false);
         setEditLock("waiting");
@@ -141,6 +143,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setFromCache(true);
         baseRef.current = null;
         const cache = uid ? readSharedCache(uid) : { projects: [], staff: [], pending: {}, draft: null };
+        if (cache.draft?.assigneeIds?.length === 1) newProjectAssignee.current = cache.draft.assigneeIds[0];
         cacheRef.current = cache;
         setProjects([]);
         setStaff([]);
@@ -394,16 +397,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState({ ...store.newEstimateState(), ...project.state, activeProjectId: project.id, activeProjectStatus: project.status, activeBottomTab: null, editingWorkItem: null });
   }, []);
 
-  const startNewProject = useCallback(() => {
+  const startNewProject = useCallback((assigneeId?: string) => {
+    const id = assigneeId ?? newProjectAssignee.current;
+    const assignee = staff.find(member => member.id === id && member.active);
+    if (!assignee) {
+      window.alert("案件一覧で個人の担当者を選択してから「新規作成」を押してください。");
+      setState(s => ({ ...s, currentStep: store.PROJECT_LIST_STEP }));
+      return;
+    }
+    newProjectAssignee.current = assignee.id;
     baseRef.current = null;
-    setState(store.newEstimateState());
-  }, []);
+    setState({ ...store.newEstimateState(), assigneeIds: [assignee.id], assigneeNames: { [assignee.id]: assignee.name } });
+  }, [staff]);
 
   const resetCurrentEstimate = useCallback(() => {
     setState((s) => ({
       ...store.newEstimateState(),
       activeProjectId: s.activeProjectId,
       activeProjectStatus: s.activeProjectStatus,
+      assigneeIds: s.assigneeIds,
+      assigneeNames: s.assigneeNames,
     }));
   }, []);
 

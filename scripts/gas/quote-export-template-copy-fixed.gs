@@ -52,7 +52,7 @@ function createEstimateSpreadsheet_(payload) {
 
   groupedItems = groupItemsByRoom_(items);
   fileName = createFileName_(projectName);
-  spreadsheet = copyTemplateSpreadsheet_(fileName);
+  spreadsheet = copyTemplateSpreadsheet_(fileName, payload);
   sheet = spreadsheet.getSheets()[0];
 
   writeToOriginalTemplate_(sheet, customerName, honorific, projectName, groupedItems, items, payload);
@@ -64,12 +64,12 @@ function createEstimateSpreadsheet_(payload) {
   };
 }
 
-function copyTemplateSpreadsheet_(fileName) {
+function copyTemplateSpreadsheet_(fileName, payload) {
   var templateFile = DriveApp.getFileById(TEMPLATE_SPREADSHEET_ID);
   var copiedFile;
 
   if (OUTPUT_FOLDER_ID) {
-    copiedFile = templateFile.makeCopy(fileName, DriveApp.getFolderById(OUTPUT_FOLDER_ID));
+    copiedFile = templateFile.makeCopy(fileName, assigneeFolder_(OUTPUT_FOLDER_ID, payload));
   } else {
     copiedFile = templateFile.makeCopy(fileName);
   }
@@ -312,4 +312,19 @@ function json_(value) {
 
 function isArray_(value) {
   return Object.prototype.toString.call(value) === '[object Array]';
+}
+
+// Search only direct children. A script-wide lock makes lookup/create atomic.
+function assigneeFolder_(parentId, payload) {
+  var name = String(payload.assigneeName || '').trim();
+  if (!name) throw new Error('案件の担当者名がありません。担当者情報を確認してください。');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var parent = DriveApp.getFolderById(parentId);
+    var folders = parent.getFoldersByName(name);
+    return folders.hasNext() ? folders.next() : parent.createFolder(name);
+  } finally {
+    lock.releaseLock();
+  }
 }

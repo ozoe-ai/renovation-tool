@@ -2,7 +2,6 @@
 
 import React from "react";
 import { useApp } from "@/lib/WizardContext";
-import { AssigneeButtons } from "../AssigneeButtons";
 
 export function InitialInfoScreen() {
   const { state, setProjectName, setStep } = useApp();
@@ -28,7 +27,6 @@ export function InitialInfoScreen() {
           </div>
         </div>
 
-        <AssigneeButtons />
         <div className="flex gap-3">
           <button
             onClick={() => setStep(1)}

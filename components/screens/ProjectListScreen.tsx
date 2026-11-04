@@ -44,10 +44,14 @@ export function ProjectListScreen() {
   };
 
   const handleNewProject = () => {
+    if (!person || !staff.some(member => member.id === person && member.active)) {
+      window.alert("個人の担当者を選択してから「新規作成」を押してください。");
+      return;
+    }
     if (hasUnsavedChanges && !window.confirm("現在の編集内容が保存されていません。新規作成しますか？")) {
       return;
     }
-    startNewProject();
+    startNewProject(person);
   };
 
   return (

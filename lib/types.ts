@@ -562,6 +562,7 @@ export interface StaffMember {
 /** Full app state */
 export interface AppState {
   assigneeIds?: string[];
+  assigneeNames?: Record<string, string>;
   activeProjectId: string | null;
   activeProjectStatus: ProjectStatus | null;
   currentStep: number;

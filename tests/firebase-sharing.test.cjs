@@ -231,7 +231,7 @@ test('credential and network failures propagate, explain the stage, and permit r
   }
 });
 
-test('login button opens the existing email form and duplicate submissions are blocked until completion', async () => {
+test('single large login button submits credentials and blocks duplicates until completion', async () => {
   const React = require('react');
   const states = [];
   const refs = [];
@@ -240,7 +240,7 @@ test('login button opens the existing email form and duplicate submissions are b
     state: { currentStep: 7 }, authReady: true, authUser: null, authError: null, pendingIds: [],
     loginWithEmail: () => { submissions++; return new Promise(resolve => { finish = resolve; }); }
   };
-  const ui = load('components/AuthControls.tsx', {
+  const ui = load('components/EmailLoginForm.tsx', {
     '@/lib/WizardContext': { useApp: () => app },
     react: { ...React,
       useEffect: () => {},
@@ -248,31 +248,17 @@ test('login button opens the existing email form and duplicate submissions are b
       useRef: initial => { const i = refIndex++; return refs[i] ??= { current: initial }; }
     }
   });
-  let showEmailForm = false;
-  const containerMocks = {
-    '@/lib/WizardContext': { useApp: () => app },
-    '@/lib/store': { PROJECT_LIST_STEP: 7 },
-    './AuthControls': ui,
-    react: { ...React, useState: () => [showEmailForm, value => { showEmailForm = typeof value === 'function' ? value(showEmailForm) : value; }] }
-  };
-  for (const [, name, path] of fs.readFileSync('components/WizardContainer.tsx', 'utf8').matchAll(/import \{ (\w+) \} from "([^"]+)";/g)) {
-    if (!(path in containerMocks) && path !== 'react') containerMocks[path] = { [name]: () => null };
-  }
-  const container = load('components/WizardContainer.tsx', containerMocks);
-  const render = () => { stateIndex = refIndex = 0; return ui.AuthControls({ showEmailForm }); };
+  const render = () => { stateIndex = refIndex = 0; return ui.EmailLoginForm(); };
   function nodes(node) {
     if (!node || typeof node !== 'object') return [];
     if (Array.isArray(node)) return node.flatMap(nodes);
     return [node, ...nodes(node.props?.children)];
   }
   const initial = nodes(render());
-  assert.equal(initial.some(node => node.type === 'form'), false);
-  assert.equal(initial.some(node => node.props?.children === 'Googleログイン'), false);
-  assert.equal(initial.some(node => node.type === 'button' && node.props['aria-controls'] === 'email-login-form'), false);
-  const trigger = nodes(container.WizardContainer()).find(node => node.type === 'button' && node.props['aria-controls'] === 'email-login-form');
+  const trigger = initial.find(node => node.type === 'button' && node.props.type === 'submit');
   assert.equal(trigger.props.children, 'ログイン');
+  assert.equal(initial.filter(node => node.type === 'button' && node.props.type === 'submit').length, 1);
   assert.match(trigger.props.className, /h-\[60px\] w-\[280px\] max-w-full/);
-  trigger.props.onClick();
   const opened = nodes(render());
   opened.find(node => node.type === 'input' && node.props.type === 'email').props.onChange({ target: { value: 'staff@example.test' } });
   opened.find(node => node.type === 'input' && node.props.type === 'password').props.onChange({ target: { value: 'secret' } });
@@ -287,4 +273,84 @@ test('login button opens the existing email form and duplicate submissions are b
   retried.props.onSubmit({ preventDefault() {} });
   assert.equal(submissions, 2);
   finish();
+});
+
+test('GAS variants reuse direct-child assignee folders under a lock without touching existing files', () => {
+  for (const file of fs.readdirSync('scripts/gas').filter(name => name.endsWith('.gs'))) {
+    const folders = new Map();
+    let held = false, created = 0;
+    const parent = {
+      getFoldersByName: name => {
+        assert.equal(held, true);
+        return { hasNext: () => folders.has(name), next: () => folders.get(name) };
+      },
+      createFolder: name => { assert.equal(held, true); created++; const folder = { name }; folders.set(name, folder); return folder; }
+    };
+    const context = {
+      DriveApp: { getFolderById: id => { assert.equal(id, '1oUKD65onJYeZWqfoeTdWuEhzr-3TE216'); return parent; } },
+      LockService: { getScriptLock: () => ({ waitLock: () => { held = true; }, releaseLock: () => { held = false; } }) }
+    };
+    vm.createContext(context);
+    vm.runInContext(fs.readFileSync(`scripts/gas/${file}`, 'utf8'), context);
+    const first = context.assigneeFolder_('1oUKD65onJYeZWqfoeTdWuEhzr-3TE216', { assigneeName: '豪志' });
+    assert.equal(context.assigneeFolder_('1oUKD65onJYeZWqfoeTdWuEhzr-3TE216', { assigneeName: '豪志' }), first);
+    assert.equal(created, 1, file);
+    assert.equal(held, false);
+    assert.throws(() => context.assigneeFolder_('parent', {}), /担当者名/);
+    parent.getFoldersByName = () => { throw new Error('Drive offline'); };
+    assert.throws(() => context.assigneeFolder_('1oUKD65onJYeZWqfoeTdWuEhzr-3TE216', { assigneeName: '豪志' }), /offline/);
+    assert.equal(held, false, 'lock must be released after a Drive error');
+  }
+});
+
+test('export API uses the saved first assignee and keeps legacy multiple assignments', async () => {
+  const requests = [];
+  const route = load('app/api/export-quote/route.ts', {
+    'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } }
+  }, {
+    process: { env: {} }, console,
+    fetch: async (url, init) => { requests.push(JSON.parse(init.body)); return { ok: true, json: async () => ({ ok: true, spreadsheetId: 'new-quote' }) }; }
+  });
+  const state = { projectName: '案件名', selectedWorkItems: [], assigneeIds: ['go', 'ozoe'], assigneeNames: { go: '豪志', ozoe: '尾添' } };
+  const original = JSON.stringify(state);
+  for (let i = 0; i < 2; i++) assert.equal((await route.POST({ json: async () => state })).status, 200);
+  assert.equal(requests[0].assigneeName, '豪志');
+  assert.deepEqual([...requests[1].assigneeIds], ['go', 'ozoe']);
+  assert.equal(JSON.stringify(state), original);
+  assert.equal((await route.POST({ json: async () => ({ ...state, assigneeIds: [] }) })).status, 400);
+  assert.equal(requests.length, 2, 'no export request without a saved assignee');
+});
+
+test('new projects inherit the chosen individual, further new projects retain it, and loaded assignments survive', () => {
+  const React = require('react');
+  const values = [], refs = [], setters = [];
+  let index = 0, refIndex = 0;
+  const alerts = [];
+  const existing = { ...record(), state: { ...record().state, assigneeIds: ['legacy-a', 'legacy-b'] } };
+  const empty = () => ({ currentStep: 0, assigneeIds: [], activeProjectId: null, selectedWorkItems: [] });
+  const context = load('lib/WizardContext.tsx', {
+    react: { ...React, useEffect: () => {}, useCallback: fn => fn, useMemo: fn => fn(),
+      useState: initial => { const i = index++; if (!(i in values)) values[i] = initial; setters[i] = v => { values[i] = typeof v === 'function' ? v(values[i]) : v; }; return [values[i], setters[i]]; },
+      useRef: initial => { const i = refIndex++; return refs[i] ??= { current: initial?.pending ? { ...initial, projects: [existing] } : initial }; }
+    },
+    './store': { initialState: empty, newEstimateState: empty, isBlankEstimate: () => false, PROJECT_LIST_STEP: 7 },
+    './project-repository': {}, './firebase-client': {},
+    './shared-project-cache': { overlayPending: cache => cache.projects }
+  }, { window: { alert: message => alerts.push(message) } });
+  const render = () => { index = refIndex = 0; return context.AppProvider({ children: null }).props.value; };
+  render();
+  setters[6]([{ id: 'go', name: '豪志', active: true }]);
+  render().startNewProject();
+  assert.equal(alerts.length, 1);
+  render().startNewProject('go');
+  assert.deepEqual([...render().state.assigneeIds], ['go']);
+  assert.equal(render().state.assigneeNames.go, '豪志');
+  render().startNewProject();
+  assert.deepEqual([...render().state.assigneeIds], ['go']);
+  render().loadProject('p1');
+  assert.deepEqual([...render().state.assigneeIds], ['legacy-a', 'legacy-b']);
+  render().resetCurrentEstimate();
+  assert.deepEqual([...render().state.assigneeIds], ['legacy-a', 'legacy-b']);
+  render().startNewProject();
+  assert.deepEqual([...render().state.assigneeIds], ['go']);
 });

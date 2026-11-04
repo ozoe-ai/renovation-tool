@@ -52,9 +52,9 @@ function verifySecret_(payload) {
 
 function createQuoteSpreadsheet_(state) {
   var fileName = createFileName_(state.projectName || '');
+  var folder = assigneeFolder_(DESTINATION_FOLDER_ID, state);
   var spreadsheet = SpreadsheetApp.create(fileName);
   var file = DriveApp.getFileById(spreadsheet.getId());
-  var folder = DriveApp.getFolderById(DESTINATION_FOLDER_ID);
   var sheet;
   var rows;
   var width;
@@ -296,4 +296,19 @@ function json_(value) {
 
 function isArray_(value) {
   return Object.prototype.toString.call(value) === '[object Array]';
+}
+
+// Search only direct children. A script-wide lock makes lookup/create atomic.
+function assigneeFolder_(parentId, payload) {
+  var name = String(payload.assigneeName || '').trim();
+  if (!name) throw new Error('案件の担当者名がありません。担当者情報を確認してください。');
+  var lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    var parent = DriveApp.getFolderById(parentId);
+    var folders = parent.getFoldersByName(name);
+    return folders.hasNext() ? folders.next() : parent.createFolder(name);
+  } finally {
+    lock.releaseLock();
+  }
 }

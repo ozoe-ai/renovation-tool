@@ -327,6 +327,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid quote payload." }, { status: 400 });
     }
 
+    // The saved assignment determines the destination, never the list filter.
+    // Legacy multi-assignee projects retain all IDs; the first is the destination.
+    const assigneeId = state.assigneeIds?.[0];
+    const assigneeName = assigneeId ? state.assigneeNames?.[assigneeId]?.trim() : "";
+    if (!assigneeName) {
+      return NextResponse.json({ error: "案件の担当者情報を確認できません。案件一覧の担当者データを確認してください。" }, { status: 400 });
+    }
+
     const gasUrl = process.env.GAS_WEB_APP_URL || DEFAULT_GAS_WEB_APP_URL;
 
     const gasItems = buildGasItems(state);
@@ -335,6 +343,9 @@ export async function POST(request: NextRequest) {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({
+        assigneeId,
+        assigneeName,
+        assigneeIds: state.assigneeIds,
         projectName: state.projectName || "",
         customerName: "",
         honorific: "\u69d8",
