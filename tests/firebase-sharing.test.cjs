@@ -169,3 +169,110 @@ test('login explicitly persists the account locally before opening Google sign-i
   assert.equal((await client.signInWithGoogle()).uid, 'staff');
   assert.deepEqual(calls, ['local','signin']);
 });
+
+function emailClient({ storageBlocked = false, persistenceBlocked = false, signInError = null } = {}) {
+  const calls = [];
+  const data = new Map([['existing-draft', 'keep']]);
+  const storage = {
+    setItem: (key, value) => { if (storageBlocked) throw new Error('storage denied'); data.set(key, value); },
+    getItem: key => data.get(key), removeItem: key => data.delete(key)
+  };
+  const client = load('lib/firebase-client.ts', {
+    'firebase/app': { getApps: () => [{}] },
+    'firebase/auth': {
+      getAuth: () => ({}), browserLocalPersistence: 'local', indexedDBLocalPersistence: 'indexeddb',
+      setPersistence: async (_auth, type) => { calls.push(type); if (persistenceBlocked) throw new Error('storage unavailable'); },
+      signInWithEmailAndPassword: async (_auth, email, password) => {
+        calls.push(['signin', email, password]);
+        if (signInError) throw signInError;
+        return { user: { uid: 'existing-staff' } };
+      }
+    }, 'firebase/firestore': {}
+  }, { window: { localStorage: storage }, process: { env: {
+    NEXT_PUBLIC_FIREBASE_API_KEY: 'test', NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: 'test',
+    NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'test', NEXT_PUBLIC_FIREBASE_APP_ID: 'test'
+  } } });
+  return { client, calls, data };
+}
+
+test('email login uses existing credentials after durable persistence and preserves draft data', async () => {
+  const { client, calls, data } = emailClient();
+  assert.equal((await client.signInWithEmail('staff@example.test', 'secret')).uid, 'existing-staff');
+  assert.deepEqual(calls, ['local', ['signin', 'staff@example.test', 'secret']]);
+  assert.deepEqual([...data], [['existing-draft', 'keep']]);
+});
+
+test('blocked localStorage falls back to IndexedDB before email authentication', async () => {
+  const { client, calls } = emailClient({ storageBlocked: true });
+  await client.signInWithEmail('staff@example.test', 'secret');
+  assert.deepEqual(calls, ['indexeddb', ['signin', 'staff@example.test', 'secret']]);
+});
+
+test('persistence failure prevents credential submission and explains recovery', async () => {
+  const { client, calls } = emailClient({ persistenceBlocked: true });
+  await assert.rejects(client.signInWithEmail('staff@example.test', 'secret'), error => {
+    assert.equal(error.code, 'auth/persistence-unavailable');
+    assert.match(client.describeAuthError(error), /空き容量/);
+    return true;
+  });
+  assert.deepEqual(calls, ['local', 'indexeddb']);
+});
+
+test('credential and network failures propagate, explain the stage, and permit retry', async () => {
+  for (const [code, message] of [['auth/invalid-credential', /パスワード/], ['auth/network-request-failed', /通信状態/]]) {
+    const { client, calls } = emailClient({ signInError: { code } });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await assert.rejects(client.signInWithEmail('staff@example.test', 'secret'), error => {
+        assert.match(client.describeAuthError(error), message);
+        return true;
+      });
+    }
+    assert.equal(calls.filter(call => Array.isArray(call)).length, 2);
+  }
+});
+
+test('login button opens the existing email form and duplicate submissions are blocked until completion', async () => {
+  const React = require('react');
+  const states = [];
+  const refs = [];
+  let stateIndex = 0, refIndex = 0, submissions = 0, finish;
+  const app = {
+    authReady: true, authUser: null, authError: null, pendingIds: [],
+    loginWithEmail: () => { submissions++; return new Promise(resolve => { finish = resolve; }); }
+  };
+  const ui = load('components/AuthControls.tsx', {
+    '@/lib/WizardContext': { useApp: () => app },
+    react: { ...React,
+      useEffect: () => {},
+      useState: initial => { const i = stateIndex++; if (!(i in states)) states[i] = initial; return [states[i], value => { states[i] = typeof value === 'function' ? value(states[i]) : value; }]; },
+      useRef: initial => { const i = refIndex++; return refs[i] ??= { current: initial }; }
+    }
+  });
+  const render = () => { stateIndex = refIndex = 0; return ui.AuthControls(); };
+  function nodes(node) {
+    if (!node || typeof node !== 'object') return [];
+    if (Array.isArray(node)) return node.flatMap(nodes);
+    return [node, ...nodes(node.props?.children)];
+  }
+  const initial = nodes(render());
+  assert.equal(initial.some(node => node.type === 'form'), false);
+  assert.equal(initial.some(node => node.props?.children === 'Googleログイン'), false);
+  const trigger = initial.find(node => node.type === 'button' && node.props['aria-controls'] === 'email-login-form');
+  assert.equal(trigger.props.children, 'ログイン');
+  assert.match(trigger.props.className, /min-h-12/);
+  trigger.props.onClick();
+  const opened = nodes(render());
+  opened.find(node => node.type === 'input' && node.props.type === 'email').props.onChange({ target: { value: 'staff@example.test' } });
+  opened.find(node => node.type === 'input' && node.props.type === 'password').props.onChange({ target: { value: 'secret' } });
+  const form = nodes(render()).find(node => node.type === 'form');
+  form.props.onSubmit({ preventDefault() {} });
+  form.props.onSubmit({ preventDefault() {} });
+  assert.equal(submissions, 1);
+  assert.equal(nodes(render()).find(node => node.type === 'button' && node.props.type === 'submit').props.disabled, true);
+  finish();
+  await new Promise(resolve => setImmediate(resolve));
+  const retried = nodes(render()).find(node => node.type === 'form');
+  retried.props.onSubmit({ preventDefault() {} });
+  assert.equal(submissions, 2);
+  finish();
+});

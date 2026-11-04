@@ -16,6 +16,7 @@ import * as projectRepository from "./project-repository";
 import { overlayPending, readSharedCache, writeSharedCache, type SharedCache } from "./shared-project-cache";
 import {
   createAccountWithEmail,
+  describeAuthError,
   onFirebaseUserChanged,
   signInWithEmail,
   signInWithGoogle,
@@ -122,30 +123,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const retrySync = useCallback(() => { setSyncError(null); setRevision(v => v + 1); setLockRevision(v => v + 1); }, []);
 
   useEffect(() => {
-    return onFirebaseUserChanged((user) => {
-      const uid = user && !user.isAnonymous ? user.uid : null;
-      uidRef.current = uid;
-      setMemberActive(false);
-      setEditLock("waiting");
-      setAuthError(null);
-      setSyncError(null);
-      setFromCache(true);
-      baseRef.current = null;
-      const cache = uid ? readSharedCache(uid) : { projects: [], staff: [], pending: {}, draft: null };
-      cacheRef.current = cache;
-      setProjects([]);
-      setStaff([]);
-      setPendingIds(Object.keys(cache.pending));
-      setState(cache.draft ?? store.initialState());
-      if (cache.draft?.activeProjectId) {
-        const queued = cache.pending[cache.draft.activeProjectId];
-        baseRef.current = "draftBaseUpdatedAt" in cache ? cache.draftBaseUpdatedAt ?? null : queued ? queued.baseUpdatedAt
-          : cache.projects.find(p => p.id === cache.draft?.activeProjectId)?.updatedAt ?? null;
-      }
-      setAuthUser(uid && user ? { uid, displayName: user.displayName, email: user.email, isAnonymous: false } : null);
-      setAuthReady(true);
-      setHydrated(true);
-    });
+    let stopped = false;
+    const timer = window.setTimeout(() => {
+      if (!stopped) setAuthError("ログイン状態の復元に時間がかかっています。通信と端末の空き容量を確認し、同じサイトの他のタブを閉じて再読み込みしてください。ブラウザのデータは削除しないでください。");
+    }, 20000);
+    let unsubscribe = () => {};
+    try {
+      unsubscribe = onFirebaseUserChanged((user) => {
+        if (stopped) return;
+        window.clearTimeout(timer);
+        const uid = user && !user.isAnonymous ? user.uid : null;
+        uidRef.current = uid;
+        setMemberActive(false);
+        setEditLock("waiting");
+        setAuthError(null);
+        setSyncError(null);
+        setFromCache(true);
+        baseRef.current = null;
+        const cache = uid ? readSharedCache(uid) : { projects: [], staff: [], pending: {}, draft: null };
+        cacheRef.current = cache;
+        setProjects([]);
+        setStaff([]);
+        setPendingIds(Object.keys(cache.pending));
+        setState(cache.draft ?? store.initialState());
+        if (cache.draft?.activeProjectId) {
+          const queued = cache.pending[cache.draft.activeProjectId];
+          baseRef.current = "draftBaseUpdatedAt" in cache ? cache.draftBaseUpdatedAt ?? null : queued ? queued.baseUpdatedAt
+            : cache.projects.find(p => p.id === cache.draft?.activeProjectId)?.updatedAt ?? null;
+        }
+        setAuthUser(uid && user ? { uid, displayName: user.displayName, email: user.email, isAnonymous: false } : null);
+        setAuthReady(true);
+        setHydrated(true);
+      }, (error) => {
+        if (stopped) return;
+        window.clearTimeout(timer);
+        setAuthError(describeAuthError(error));
+      });
+    } catch (error) {
+      window.clearTimeout(timer);
+      setAuthError(describeAuthError(error));
+    }
+    return () => { stopped = true; window.clearTimeout(timer); unsubscribe(); };
   }, []);
 
   // One editor per account/browser avoids two tabs overwriting the durable outbox.
@@ -405,7 +423,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await signInWithEmail(email, password);
     } catch (error) {
       console.error("Failed to sign in with email", error);
-      setAuthError("メールログインに失敗しました。メールアドレスとパスワードを確認してください。");
+      setAuthError(describeAuthError(error));
     }
   }, []);
 
@@ -415,7 +433,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await createAccountWithEmail(email, password);
     } catch (error) {
       console.error("Failed to create email account", error);
-      setAuthError("メールアカウント作成に失敗しました。Firebase Consoleでメール/パスワードが有効か確認してください。");
+      setAuthError(describeAuthError(error));
     }
   }, []);
 

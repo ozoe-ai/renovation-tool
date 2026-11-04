@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
-import { LogIn, LogOut, Mail, User } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import { LogOut, User } from "lucide-react";
 import { useApp } from "@/lib/WizardContext";
 
 export function AuthControls() {
@@ -10,7 +10,6 @@ export function AuthControls() {
     authReady,
     authUser,
     loginWithEmail,
-    loginWithGoogle,
     logout,
     registerWithEmail,
     memberActive, syncError, fromCache, pendingIds, retrySync,
@@ -19,15 +18,25 @@ export function AuthControls() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const actionPending = useRef(false);
+  const [takingLong, setTakingLong] = useState(false);
+  useEffect(() => {
+    if (!busy) { setTakingLong(false); return; }
+    const timer = window.setTimeout(() => setTakingLong(true), 20000);
+    return () => window.clearTimeout(timer);
+  }, [busy]);
 
   const displayName = authUser?.displayName || authUser?.email;
   const isSignedIn = authUser && !authUser.isAnonymous;
 
   const handleAuthAction = async (action: () => Promise<void>) => {
+    if (actionPending.current) return;
+    actionPending.current = true;
     setBusy(true);
     try {
       await action();
     } finally {
+      actionPending.current = false;
       setBusy(false);
     }
   };
@@ -61,30 +70,23 @@ export function AuthControls() {
             <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
-                onClick={() => handleAuthAction(loginWithGoogle)}
-                disabled={busy || !authReady}
-                className="inline-flex h-8 items-center gap-1.5 rounded bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-              >
-                <LogIn className="h-4 w-4" aria-hidden="true" />
-                Googleログイン
-              </button>
-              <button
-                type="button"
                 onClick={() => setShowEmailForm((value) => !value)}
-                className="inline-flex h-8 items-center justify-center rounded border border-input px-2.5 text-foreground hover:bg-accent"
-                aria-label="メールログイン"
-                title="メールログイン"
+                className="inline-flex min-h-12 items-center justify-center rounded bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90"
+                aria-expanded={showEmailForm}
+                aria-controls="email-login-form"
               >
-                <Mail className="h-4 w-4" aria-hidden="true" />
+                ログイン
               </button>
             </div>
           )}
         </div>
 
         {!isSignedIn && showEmailForm && (
-          <div className="grid gap-2 rounded border border-border bg-background p-3 sm:grid-cols-[1fr_1fr_auto_auto]">
+          <form id="email-login-form" aria-busy={busy} onSubmit={(event) => { event.preventDefault(); if (authReady && email && password) void handleAuthAction(() => loginWithEmail(email, password)); }} className="grid gap-2 rounded border border-border bg-background p-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]">
             <input
               type="email"
+              aria-label="メールアドレス"
+              autoComplete="username"
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="メールアドレス"
@@ -92,31 +94,34 @@ export function AuthControls() {
             />
             <input
               type="password"
+              aria-label="パスワード"
+              autoComplete="current-password"
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="パスワード"
               className="h-9 rounded border border-input bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
             <button
-              type="button"
-              onClick={() => handleAuthAction(() => loginWithEmail(email, password))}
-              disabled={busy || !email || !password}
+              type="submit"
+              disabled={busy || !authReady || !email || !password}
               className="h-9 rounded bg-primary px-3 text-xs font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
             >
-              ログイン
+              {busy ? "処理中…" : "ログイン"}
             </button>
             <button
               type="button"
               onClick={() => handleAuthAction(() => registerWithEmail(email, password))}
-              disabled={busy || !email || password.length < 6}
+              disabled={busy || !authReady || !email || password.length < 6}
               className="h-9 rounded border border-input px-3 text-xs font-medium text-foreground hover:bg-accent disabled:opacity-60"
             >
               新規登録
             </button>
-          </div>
+          </form>
         )}
 
-        {authError && <p className="text-xs font-medium text-destructive">{authError}</p>}
+        {takingLong && <p role="status" className="text-xs text-destructive">認証または保存領域の応答を待っています。通信状態を確認してください。改善しない場合は他のタブを閉じ、この画面を再読み込みしてください。処理の重複を防ぐため、応答が返るまで再送信できません。</p>}
+        {authError && <p role="alert" className="text-xs font-medium text-destructive">{authError}</p>}
+        {!authReady && authError && <button type="button" onClick={() => window.location.reload()} className="min-h-12 rounded border border-input px-3 text-sm">再読み込みして再試行</button>}
         {isSignedIn && memberActive && <p role="status" className="text-xs text-muted-foreground">
           {pendingIds.length ? `端末保存済み・未同期 ${pendingIds.length}件（接続時に同期）` : fromCache ? "端末内のデータを表示中・共有サーバーへの接続待ち" : "共有データを取得済み"}
         </p>}
