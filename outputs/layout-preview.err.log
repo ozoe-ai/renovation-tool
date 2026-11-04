@@ -1,0 +1,6 @@
+[export-quote] {
+  requestId: 'f6fe8b9b938225be1ad8c2c706a670eac54f972498c057a0f8de1f4cba56db8c',
+  stage: 'gateway',
+  code: 'GAS_UPGRADE_REQUIRED',
+  httpStatus: 200
+}

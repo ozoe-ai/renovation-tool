@@ -24,6 +24,7 @@ export function FinalConfirmScreen() {
   const [spreadsheetUrl, setSpreadsheetUrl] = useState<string | null>(null);
   const errorRef = useRef<HTMLDivElement>(null);
   const projectRef = useRef<HTMLInputElement>(null);
+  const savePending = useRef(false);
 
   const cost = getSumCost();
   const sell = getSumSell();
@@ -51,23 +52,29 @@ export function FinalConfirmScreen() {
   }, [errors]);
 
   const handleConfirm = async () => {
+    if (savePending.current) return;
     // Save inline edits
     setProjectName(localProject);
     const m = parseFloat(localMultiplier);
     setMultiplier(!isNaN(m) && m > 0 ? m : null);
 
     if (!validate()) return;
+    savePending.current = true;
     setExportError(null);
     setExporting(true);
 
     try {
       const exportState = {
         ...state,
+        activeProjectId: state.activeProjectId || `project-${crypto.randomUUID()}`,
         projectName: localProject.trim(),
         customerName: "",
         multiplier: !isNaN(m) && m > 0 ? m : null,
         assigneeNames: Object.fromEntries((state.assigneeIds ?? []).map(id => [id, state.assigneeNames?.[id] || staff.find(member => member.id === id)?.name || ""])),
       };
+      // Persist the input and stable project ID before any external side effect.
+      // A reload/retry uses the same ID and thus the same GAS export journal.
+      await saveProject(state.activeProjectStatus || "draft", exportState);
       const response = await fetch("/api/export-quote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -75,22 +82,24 @@ export function FinalConfirmScreen() {
       });
       const result = await response.json().catch(() => null);
 
-      if (!response.ok) {
-        setExportError(result?.error || "見積書の作成に失敗しました。時間をおいて再度お試しください。");
+      if (!response.ok || result?.ok !== true || !result?.spreadsheetId || !result?.spreadsheetUrl) {
+        const detail = result?.error || "保存結果を確認できませんでした。入力内容は保持しています。同じ内容で再試行してください。";
+        setExportError(result?.requestId ? `${detail}（確認ID: ${result.requestId}）` : detail);
         return;
       }
 
       setSpreadsheetUrl(result?.spreadsheetUrl);
-      try { await saveProject("completed", exportState); }
+      try { await saveProject("completed", exportState, { requireRemote: true }); }
       catch (error) {
-        setExportError(`見積書は作成されましたが、案件を端末へ保存できませんでした。${error instanceof Error ? error.message : ""}`);
+        setExportError("見積書は作成済みですが、案件データの保存確認が完了していません。入力内容は保持しています。同じ内容で再試行すると、生成済みのファイルを再利用して案件の保存を再実行します。");
         return;
       }
       setConfirmed(true);
     } catch {
-      setExportError("見積書の作成に失敗しました。時間をおいて再度お試しください。");
+      setExportError("入力内容の端末保存、または保存サーバーへの通信に失敗しました。入力内容は画面に保持しています。空き容量と通信状態を確認し、同じ内容で再試行してください。");
     } finally {
       setExporting(false);
+      savePending.current = false;
     }
   };
 

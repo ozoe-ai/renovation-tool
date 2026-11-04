@@ -1,29 +1,6 @@
 var TEMPLATE_SPREADSHEET_ID = '1i3qAzvRCzQvz6uJp-TWQeMQYloKjv90-h732qC6xxr4';
 var OUTPUT_FOLDER_ID = '1oUKD65onJYeZWqfoeTdWuEhzr-3TE216';
 
-function doPost(e) {
-  try {
-    var payload = parsePayload_(e);
-    var result = createEstimateSpreadsheet_(payload);
-
-    return json_({
-      ok: true,
-      success: true,
-      spreadsheetId: result.spreadsheetId,
-      spreadsheetUrl: result.url,
-      url: result.url,
-      fileName: result.fileName
-    });
-  } catch (error) {
-    return json_({
-      ok: false,
-      success: false,
-      message: error.message,
-      error: error.message
-    });
-  }
-}
-
 function parsePayload_(e) {
   if (!e || !e.postData || !e.postData.contents) {
     throw new Error('POST data is empty.');
@@ -53,29 +30,27 @@ function createEstimateSpreadsheet_(payload) {
 
   groupedItems = groupItemsByRoom_(items);
   fileName = createFileName_(projectName);
-  spreadsheet = copyTemplateSpreadsheet_(fileName, payload);
+  spreadsheet = openExportSpreadsheet_(fileName, payload);
+  fileName = payload._fileName;
   sheet = spreadsheet.getSheets()[0];
 
-  writeToOriginalTemplate_(sheet, customerName, honorific, projectName, groupedItems, discount);
+  var reused = payload._journal.status === 'complete';
+  if (!reused) {
+    payload._stage = 'write';
+    writeToOriginalTemplate_(sheet, customerName, honorific, projectName, groupedItems, discount);
+    SpreadsheetApp.flush();
+  }
+  payload._stage = 'verify';
+  if (String(sheet.getRange('A4').getValue()) !== '物件名：' + projectName) throw exportError_('VERIFY_FAILED');
+  payload._journal.status = 'complete';
+  saveExportJournal_(payload);
 
   return {
     spreadsheetId: spreadsheet.getId(),
     url: spreadsheet.getUrl(),
-    fileName: fileName
+    fileName: fileName,
+    reused: reused
   };
-}
-
-function copyTemplateSpreadsheet_(fileName, payload) {
-  var templateFile = DriveApp.getFileById(TEMPLATE_SPREADSHEET_ID);
-  var copiedFile;
-
-  if (OUTPUT_FOLDER_ID) {
-    copiedFile = templateFile.makeCopy(fileName, assigneeFolder_(OUTPUT_FOLDER_ID, payload));
-  } else {
-    copiedFile = templateFile.makeCopy(fileName);
-  }
-
-  return SpreadsheetApp.openById(copiedFile.getId());
 }
 
 function writeToOriginalTemplate_(sheet, customerName, honorific, projectName, groupedItems, discount) {
@@ -455,6 +430,11 @@ function assigneeFolder_(parentId, payload) {
     throw new Error('案件の担当者名がありません。アプリから担当者情報を送信してください。');
   }
 
+  if (payload._lockHeld) {
+    var existingParent = DriveApp.getFolderById(parentId);
+    var existingFolders = existingParent.getFoldersByName(name);
+    return existingFolders.hasNext() ? existingFolders.next() : existingParent.createFolder(name);
+  }
   var lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -463,5 +443,152 @@ function assigneeFolder_(parentId, payload) {
     return folders.hasNext() ? folders.next() : parent.createFolder(name);
   } finally {
     lock.releaseLock();
+  }
+}
+
+function doGet() {
+  return json_({ ok: true, protocolVersion: 'quote-export-v2' });
+}
+
+function doPost(e) {
+  var payload;
+  var lock;
+  var held = false;
+  try {
+    payload = parsePayload_(e);
+    payload._stage = 'validation';
+    if (payload.protocolVersion !== 'quote-export-v2' || !/^[a-f0-9]{64}$/.test(payload.requestId || '') ||
+        !String(payload.assigneeName || '').trim() || !isArray_(payload.items || payload.selectedWorkItems)) {
+      throw exportError_('INVALID_PAYLOAD');
+    }
+    payload._stage = 'authentication';
+    var expected = PropertiesService.getScriptProperties().getProperty('API_SECRET');
+    if (expected && String(payload.apiSecret || '') !== expected) throw exportError_('ACCESS_DENIED');
+    lock = LockService.getScriptLock();
+    held = lock.tryLock(20000);
+    if (!held) throw exportError_('BUSY');
+    payload._lockHeld = true;
+    var result = createEstimateSpreadsheet_(payload);
+    console.log(JSON.stringify({ requestId: payload.requestId, stage: 'complete', code: 'OK', reused: !!result.reused }));
+    return json_({ ok: true, success: true, protocolVersion: 'quote-export-v2', requestId: payload.requestId,
+      spreadsheetId: result.spreadsheetId, spreadsheetUrl: result.url, url: result.url,
+      fileName: result.fileName, reused: !!result.reused });
+  } catch (error) {
+    var stages = ['validation', 'authentication', 'folder', 'template', 'copy', 'write', 'verify'];
+    var stage = payload && stages.indexOf(payload._stage) >= 0 ? payload._stage : 'validation';
+    var code = error && error.exportCode || (stage === 'write' ? 'WRITE_FAILED' : stage === 'verify' ? 'VERIFY_FAILED' : 'DRIVE_ERROR');
+    var requestId = payload && /^[a-f0-9]{64}$/.test(payload.requestId || '') ? payload.requestId : undefined;
+    // Never log raw exceptions, request bodies, account details, names or tokens.
+    console.error(JSON.stringify({ requestId: requestId, stage: stage, code: code, httpStatus: error && error.httpStatus, googleReason: error && error.googleReason }));
+    return json_({ ok: false, success: false, protocolVersion: 'quote-export-v2', requestId: requestId,
+      stage: stage, code: code, error: '見積の保存処理に失敗しました。入力内容を保持したまま再試行してください。' });
+  } finally {
+    if (held) lock.releaseLock();
+  }
+}
+
+function exportError_(code, httpStatus) {
+  var error = new Error(code);
+  error.exportCode = code;
+  error.httpStatus = httpStatus;
+  return error;
+}
+
+function driveJson_(path, method, body) {
+  var options = {
+    method: method || 'get', contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    muteHttpExceptions: true
+  };
+  if (body) options.payload = JSON.stringify(body);
+  var response = UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/' + path, options);
+  var status = response.getResponseCode();
+  if (status < 200 || status >= 300) {
+    var problem;
+    try { problem = JSON.parse(response.getContentText()); } catch (ignored) {}
+    var reason = problem && problem.error && problem.error.errors && problem.error.errors[0] && problem.error.errors[0].reason;
+    var allowedReasons = ['insufficientPermissions', 'forbidden', 'notFound', 'accessNotConfigured', 'storageQuotaExceeded', 'rateLimitExceeded', 'userRateLimitExceeded', 'dailyLimitExceeded'];
+    var failure = exportError_(status === 401 || status === 403 ? 'ACCESS_DENIED' : 'DRIVE_ERROR', status);
+    if (allowedReasons.indexOf(reason) >= 0) failure.googleReason = reason;
+    throw failure;
+  }
+  return JSON.parse(response.getContentText());
+}
+
+function saveExportJournal_(payload) {
+  PropertiesService.getScriptProperties().setProperty('quote-export:' + payload.requestId, JSON.stringify(payload._journal));
+}
+
+function openExportSpreadsheet_(fileName, payload) {
+  var properties = PropertiesService.getScriptProperties();
+  var raw = properties.getProperty('quote-export:' + payload.requestId);
+  var journal = raw ? JSON.parse(raw) : { status: 'new' };
+  payload._journal = journal;
+  payload._stage = 'folder';
+  var folder = journal.folderId ? DriveApp.getFolderById(journal.folderId) : assigneeFolder_(OUTPUT_FOLDER_ID, payload);
+  journal.folderId = folder.getId();
+
+  payload._stage = 'template';
+  var template = DriveApp.getFileById(TEMPLATE_SPREADSHEET_ID);
+  if (template.getMimeType() !== 'application/vnd.google-apps.spreadsheet') throw exportError_('INVALID_PAYLOAD');
+
+  payload._stage = 'copy';
+  var fields = 'id,name,mimeType,parents,appProperties,trashed';
+  var file;
+  if (journal.fileId) {
+    file = driveJson_('files/' + encodeURIComponent(journal.fileId) + '?supportsAllDrives=true&fields=' + fields);
+  } else {
+    // appProperties is written atomically with the template copy. A lost response
+    // can therefore be recovered without guessing by filename or copying again.
+    var query = "'" + journal.folderId + "' in parents and trashed = false and appProperties has { key='quoteRequestId' and value='" + payload.requestId + "' }";
+    var found = driveJson_('files?spaces=drive&supportsAllDrives=true&includeItemsFromAllDrives=true&pageSize=2&q=' + encodeURIComponent(query) + '&fields=files(' + fields + ')');
+    if (found.files && found.files.length > 1) throw exportError_('VERIFY_FAILED');
+    file = found.files && found.files[0];
+    if (!file) {
+      // An ambiguous previous copy must be reconciled, never blindly repeated.
+      if (journal.status === 'copy-pending') throw exportError_('COPY_UNCERTAIN');
+      journal.status = 'copy-pending';
+      saveExportJournal_(payload);
+      try {
+        file = driveJson_('files/' + encodeURIComponent(TEMPLATE_SPREADSHEET_ID) + '/copy?supportsAllDrives=true&fields=' + fields, 'post', {
+          name: fileName, parents: [journal.folderId], appProperties: { quoteRequestId: payload.requestId }
+        });
+      } catch (error) {
+        // A definite rejection did not create a file. Timeouts/5xx remain uncertain.
+        if (error.httpStatus >= 400 && error.httpStatus < 500 && error.httpStatus !== 408) {
+          journal.status = 'copy-rejected';
+          saveExportJournal_(payload);
+          throw error;
+        }
+        throw exportError_('COPY_UNCERTAIN', error.httpStatus);
+      }
+    }
+  }
+  if (!file || file.trashed || file.mimeType !== 'application/vnd.google-apps.spreadsheet' ||
+      !file.parents || file.parents.indexOf(journal.folderId) < 0 ||
+      !file.appProperties || file.appProperties.quoteRequestId !== payload.requestId) throw exportError_('VERIFY_FAILED');
+  journal.fileId = file.id;
+  payload._fileName = file.name;
+  saveExportJournal_(payload);
+  payload._stage = 'write';
+  return SpreadsheetApp.openById(file.id);
+}
+
+// Execute manually in the GAS editor to check access without creating any files.
+function diagnoseQuoteExport() {
+  var stage = 'template';
+  try {
+    var template = driveJson_('files/' + TEMPLATE_SPREADSHEET_ID + '?supportsAllDrives=true&fields=mimeType,capabilities(canCopy)');
+    stage = 'folder';
+    var folder = driveJson_('files/' + OUTPUT_FOLDER_ID + '?supportsAllDrives=true&fields=mimeType,capabilities(canAddChildren)');
+    var result = { protocolVersion: 'quote-export-v2', templateIsSpreadsheet: template.mimeType === 'application/vnd.google-apps.spreadsheet',
+      canCopyTemplate: !!(template.capabilities && template.capabilities.canCopy),
+      destinationIsFolder: folder.mimeType === 'application/vnd.google-apps.folder',
+      canAddChildren: !!(folder.capabilities && folder.capabilities.canAddChildren) };
+    console.log(JSON.stringify(result));
+    return result;
+  } catch (error) {
+    console.error(JSON.stringify({ stage: stage, code: error.exportCode || 'DRIVE_ERROR', httpStatus: error.httpStatus }));
+    throw new Error('アクセス診断に失敗しました。ログの段階とコードを確認してください。');
   }
 }

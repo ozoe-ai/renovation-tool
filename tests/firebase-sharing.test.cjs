@@ -248,7 +248,7 @@ test('single large login button submits credentials and blocks duplicates until 
       useRef: initial => { const i = refIndex++; return refs[i] ??= { current: initial }; }
     }
   });
-  const render = () => { stateIndex = refIndex = 0; return ui.EmailLoginForm(); };
+  const render = () => { stateIndex = refIndex = 0; return ui.EmailLoginForm({ children: controls => [controls.inputs, controls.button, controls.feedback] }); };
   function nodes(node) {
     if (!node || typeof node !== 'object') return [];
     if (Array.isArray(node)) return node.flatMap(nodes);
@@ -258,6 +258,7 @@ test('single large login button submits credentials and blocks duplicates until 
   const trigger = initial.find(node => node.type === 'button' && node.props.type === 'submit');
   assert.equal(trigger.props.children, 'ログイン');
   assert.equal(initial.filter(node => node.type === 'button' && node.props.type === 'submit').length, 1);
+  assert.equal(initial.some(node => node.type === 'button' && node.props.children === '新規登録'), false);
   assert.match(trigger.props.className, /h-\[60px\] w-\[280px\] max-w-full/);
   const opened = nodes(render());
   opened.find(node => node.type === 'input' && node.props.type === 'email').props.onChange({ target: { value: 'staff@example.test' } });
@@ -308,10 +309,14 @@ test('export API uses the saved first assignee and keeps legacy multiple assignm
   const route = load('app/api/export-quote/route.ts', {
     'next/server': { NextResponse: { json: (body, init = {}) => ({ body, status: init.status ?? 200 }) } }
   }, {
-    process: { env: {} }, console,
-    fetch: async (url, init) => { requests.push(JSON.parse(init.body)); return { ok: true, json: async () => ({ ok: true, spreadsheetId: 'new-quote' }) }; }
+    process: { env: {} }, console, AbortSignal,
+    fetch: async (url, init) => {
+      if (!init.body) return { ok: true, json: async () => ({ protocolVersion: 'quote-export-v2' }) };
+      const payload = JSON.parse(init.body); requests.push(payload);
+      return { ok: true, json: async () => ({ ok: true, protocolVersion: 'quote-export-v2', requestId: payload.requestId, spreadsheetId: 'new-quote-123' }) };
+    }
   });
-  const state = { projectName: '案件名', selectedWorkItems: [], assigneeIds: ['go', 'ozoe'], assigneeNames: { go: '豪志', ozoe: '尾添' } };
+  const state = { activeProjectId: 'saved-project', projectName: '案件名', selectedWorkItems: [], assigneeIds: ['go', 'ozoe'], assigneeNames: { go: '豪志', ozoe: '尾添' } };
   const original = JSON.stringify(state);
   for (let i = 0; i < 2; i++) assert.equal((await route.POST({ json: async () => state })).status, 200);
   assert.equal(requests[0].assigneeName, '豪志');

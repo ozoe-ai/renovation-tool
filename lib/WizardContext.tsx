@@ -69,7 +69,7 @@ interface AppContextType {
   // Loan
   setLoan: (loan: LoanCalc | null) => void;
   // Projects
-  saveProject: (status: ProjectStatus, stateOverride?: AppState) => Promise<void>;
+  saveProject: (status: ProjectStatus, stateOverride?: AppState, options?: { requireRemote?: boolean }) => Promise<void>;
   loadProject: (projectId: string) => void;
   startNewProject: (assigneeId?: string) => void;
   resetCurrentEstimate: () => void;
@@ -109,6 +109,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const uidRef = React.useRef<string | null>(null);
   const baseRef = React.useRef<string | null>(null);
   const newProjectAssignee = React.useRef<string | null>(null);
+  const showProjectsAfterLogin = React.useRef(false);
   const flushing = React.useRef(false);
   const flushRequested = React.useRef(false);
 
@@ -148,7 +149,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setProjects([]);
         setStaff([]);
         setPendingIds(Object.keys(cache.pending));
-        setState(cache.draft ?? store.initialState());
+        setState(uid && showProjectsAfterLogin.current
+          ? { ...(cache.draft ?? store.initialState()), currentStep: store.PROJECT_LIST_STEP }
+          : cache.draft ?? store.initialState());
         if (cache.draft?.activeProjectId) {
           const queued = cache.pending[cache.draft.activeProjectId];
           baseRef.current = "draftBaseUpdatedAt" in cache ? cache.draftBaseUpdatedAt ?? null : queued ? queued.baseUpdatedAt
@@ -172,7 +175,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // One editor per account/browser avoids two tabs overwriting the durable outbox.
   useEffect(() => {
     if (!authUser) return;
-    if (!navigator.locks) { setEditLock("available"); return; }
+    if (!navigator.locks) { showProjectsAfterLogin.current = false; setEditLock("available"); return; }
     let cancelled = false;
     let release = () => {};
     const held = new Promise<void>(resolve => { release = resolve; });
@@ -186,7 +189,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setProjects(overlayPending(cache));
       setStaff(cache.staff);
       setPendingIds(Object.keys(cache.pending));
-      setState(cache.draft ?? store.initialState());
+      setState(showProjectsAfterLogin.current
+        ? { ...(cache.draft ?? store.initialState()), currentStep: store.PROJECT_LIST_STEP }
+        : cache.draft ?? store.initialState());
+      showProjectsAfterLogin.current = false;
       const id = cache.draft?.activeProjectId;
       baseRef.current = "draftBaseUpdatedAt" in cache ? cache.draftBaseUpdatedAt ?? null
         : id ? cache.pending[id]?.baseUpdatedAt ?? cache.projects.find(p => p.id === id)?.updatedAt ?? null : null;
@@ -368,7 +374,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState((s) => ({ ...s, loan: loan }));
   }, []);
 
-  const saveProject = useCallback(async (status: ProjectStatus, stateOverride?: AppState) => {
+  const saveProject = useCallback(async (status: ProjectStatus, stateOverride?: AppState, options?: { requireRemote?: boolean }) => {
     if (!authUser || !memberActive) throw new Error("有効な社内アカウントでログインしてください。");
     const cache = cacheRef.current;
     const input = stateOverride ?? state;
@@ -387,6 +393,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setState(draft);
     setSyncError(null);
     setRevision(v => v + 1);
+    if (options?.requireRemote) {
+      try {
+        const saved = await projectRepository.saveSharedProject(authUser.uid, pending);
+        if (uidRef.current !== authUser.uid) throw new Error("認証状態が変わりました。");
+        const current = cacheRef.current;
+        const nextPending = { ...current.pending };
+        if (nextPending[id]?.project.clientSaveId === project.clientSaveId) delete nextPending[id];
+        persist({ ...current, projects: store.upsertProject(current.projects, saved), pending: nextPending,
+          draftBaseUpdatedAt: current.draft?.activeProjectId === id ? saved.updatedAt : current.draftBaseUpdatedAt });
+        if (current.draft?.activeProjectId === id) baseRef.current = saved.updatedAt;
+      } catch (error) {
+        const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+        console.error("[quote-project-save]", { stage: "project", code: ["permission-denied", "unavailable", "failed-precondition", "invalid-argument", "aborted", "resource-exhausted", "unauthenticated", "deadline-exceeded"].includes(code) ? code : "PROJECT_SAVE_FAILED" });
+        throw new Error("案件の共有サーバー保存に失敗しました。入力内容と見積ファイルは保持されています。同じ内容で再試行してください。");
+      }
+    }
   }, [state, authUser, memberActive, persist]);
 
   const loadProject = useCallback((projectId: string) => {
@@ -432,9 +454,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const loginWithEmail = useCallback(async (email: string, password: string) => {
     setAuthError(null);
+    showProjectsAfterLogin.current = true;
     try {
       await signInWithEmail(email, password);
+      setState(s => ({ ...s, currentStep: store.PROJECT_LIST_STEP }));
     } catch (error) {
+      showProjectsAfterLogin.current = false;
       console.error("Failed to sign in with email", error);
       setAuthError(describeAuthError(error));
     }

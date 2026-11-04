@@ -49,6 +49,9 @@ export function getFirestoreDb(): Firestore | null {
   const app = getFirebaseApp();
   if (!app || typeof window === "undefined") return null;
   firestore ??= initializeFirestore(app, {
+    // Optional estimate fields (e.g. an unentered totalAreaSqm) are not values.
+    // Keep valid fields unchanged and omit undefined properties during writes.
+    ignoreUndefinedProperties: true,
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
   });
   return firestore;

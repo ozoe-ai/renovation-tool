@@ -1,5 +1,7 @@
 # 担当者別保存の反映と確認
 
+保存再試行対応版の最新手順・検証結果は `outputs/SAVE_FIX_REPORT.md` を参照してください。現在のアプリは `outputs/Code.gs` の `quote-export-v2` 版と組み合わせて反映する必要があります。
+
 アプリの `/api/export-quote` は、既存のGAS Webアプリへ保存を依頼します。ローカルコードの変更だけでは、公開済みGASの保存先は変わりません。
 
 ## 反映

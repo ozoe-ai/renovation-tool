@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 ﻿import { NextRequest, NextResponse } from "next/server";
 import type { AppState } from "@/lib/types";
 
@@ -319,65 +320,69 @@ function buildGasItems(state: AppState) {
   }, []);
 }
 
+const PROTOCOL = "quote-export-v2";
+const STAGE_LABELS: Record<string, string> = {
+  authentication: "保存先GASの認証",
+  validation: "担当者情報の確認", gateway: "保存先GASへの接続", folder: "担当者フォルダの確認・作成",
+  template: "見積テンプレートの確認", copy: "見積ファイルの生成", write: "見積内容の書き込み", verify: "保存結果の確認",
+};
+
 export async function POST(request: NextRequest) {
+  let requestId: string | undefined;
+  let stage = "validation";
+  const fail = (code: string, status: number, httpStatus?: number) => {
+    console.error("[export-quote]", { requestId, stage, code, httpStatus });
+    const message = code === "GAS_UPGRADE_REQUIRED"
+      ? "保存先GASが再試行対応版に更新されていません。管理者にGASの更新と接続先URLの確認を依頼してください。"
+      : code === "ASSIGNEE_MISSING"
+        ? "案件に保存された担当者名を確認できません。最新版の画面で案件を開き直してください。"
+        : code === "PROJECT_ID_MISSING"
+          ? "再試行用の案件情報を保存できません。最新版の画面から再試行してください。"
+          : code === "ACCESS_DENIED"
+            ? `${STAGE_LABELS[stage] || "保存処理"}で認証・権限の確認に失敗しました。管理者にGASの実行アカウント、テンプレートと保存先のアクセス権を確認してもらい、同じ内容で再試行してください。`
+          : code === "COPY_UNCERTAIN"
+            ? "ファイル生成の結果を確認中です。重複を防ぐため新規作成を停止しています。同じ内容で再試行してください。改善しない場合は管理者へ連絡してください。"
+            : `${STAGE_LABELS[stage] || "見積の保存"}に失敗しました。入力内容は保持しています。同じ内容で再試行し、改善しない場合は管理者へ連絡してください。`;
+    return NextResponse.json({ ok: false, error: message, code, stage, requestId: requestId?.slice(0, 12) }, { status });
+  };
   try {
     const state = (await request.json()) as AppState;
-
-    if (!state || !Array.isArray(state.selectedWorkItems)) {
-      return NextResponse.json({ error: "Invalid quote payload." }, { status: 400 });
-    }
-
-    // The saved assignment determines the destination, never the list filter.
-    // Legacy multi-assignee projects retain all IDs; the first is the destination.
+    if (!state || !Array.isArray(state.selectedWorkItems)) return fail("INVALID_PAYLOAD", 400);
     const assigneeId = state.assigneeIds?.[0];
     const assigneeName = assigneeId ? state.assigneeNames?.[assigneeId]?.trim() : "";
-    if (!assigneeName) {
-      return NextResponse.json({ error: "案件の担当者情報を確認できません。案件一覧の担当者データを確認してください。" }, { status: 400 });
-    }
-
-    const gasUrl = process.env.GAS_WEB_APP_URL || DEFAULT_GAS_WEB_APP_URL;
-
-    const gasItems = buildGasItems(state);
+    if (!assigneeName) return fail("ASSIGNEE_MISSING", 400);
+    if (!state.activeProjectId || typeof state.activeProjectId !== "string") return fail("PROJECT_ID_MISSING", 400);
     const totalAmount = calculateTotal(state);
+    const payload = {
+      assigneeId, assigneeName, assigneeIds: state.assigneeIds,
+      projectName: state.projectName || "", customerName: "", honorific: "様", discount: 0,
+      total: totalAmount, totalAmount, quoteTotal: totalAmount,
+      estimateAmountCell: "BC6", estimateAmount: totalAmount, items: buildGasItems(state),
+    };
+    // UI filters/navigation, timestamps, credentials and sync metadata are excluded.
+    requestId = createHash("sha256").update(JSON.stringify({ projectId: state.activeProjectId, ...payload })).digest("hex");
+    const gasUrl = process.env.GAS_WEB_APP_URL || DEFAULT_GAS_WEB_APP_URL;
+    stage = "gateway";
+    const health = await fetch(gasUrl, { cache: "no-store", signal: AbortSignal.timeout(15000) });
+    const capabilities = await health.json().catch(() => null);
+    if (!health.ok || capabilities?.protocolVersion !== PROTOCOL) return fail("GAS_UPGRADE_REQUIRED", 502, health.status);
     const response = await fetch(gasUrl, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
-        assigneeId,
-        assigneeName,
-        assigneeIds: state.assigneeIds,
-        projectName: state.projectName || "",
-        customerName: "",
-        honorific: "\u69d8",
-        discount: 0,
-        total: totalAmount,
-        totalAmount,
-        quoteTotal: totalAmount,
-        estimateAmountCell: "BC6",
-        estimateAmount: totalAmount,
-        items: gasItems,
-        apiSecret: process.env.GAS_API_SECRET || "",
-      }),
+      method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, signal: AbortSignal.timeout(65000),
+      body: JSON.stringify({ ...payload, protocolVersion: PROTOCOL, requestId, apiSecret: process.env.GAS_API_SECRET || "" }),
     });
-
     const result = await response.json().catch(() => null);
-    const succeeded = result?.ok === true || result?.success === true;
-    if (!response.ok || !succeeded) {
-      return NextResponse.json(
-        { error: result?.error || result?.message || "Failed to export quote." },
-        { status: response.ok ? 500 : response.status }
-      );
+    if (!response.ok || result?.ok !== true) {
+      stage = typeof result?.stage === "string" && result.stage in STAGE_LABELS ? result.stage : "gateway";
+      const code = ["COPY_UNCERTAIN", "ACCESS_DENIED", "DRIVE_ERROR", "WRITE_FAILED", "VERIFY_FAILED", "BUSY", "INVALID_PAYLOAD"].includes(result?.code) ? result.code : "GAS_FAILED";
+      return fail(code, response.ok ? 502 : response.status, response.status);
     }
-
-    return NextResponse.json({
-      ok: true,
-      spreadsheetId: result.spreadsheetId,
-      spreadsheetUrl: result.spreadsheetUrl || result.url,
-      fileName: result.fileName,
-    });
+    stage = "verify";
+    if (result.protocolVersion !== PROTOCOL || result.requestId !== requestId || !/^[A-Za-z0-9_-]{10,}$/.test(result.spreadsheetId || "")) return fail("INVALID_RECEIPT", 502);
+    console.info("[export-quote]", { requestId, stage: "complete", code: "OK", reused: result.reused === true });
+    return NextResponse.json({ ok: true, spreadsheetId: result.spreadsheetId,
+      spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${result.spreadsheetId}/edit`, fileName: result.fileName, requestId });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to export quote.";
-    console.error("[export-quote]", error);
-    return NextResponse.json({ error: message }, { status: 500 });
+    const code = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError") ? "NETWORK_TIMEOUT" : "REQUEST_FAILED";
+    return fail(code, 502);
   }
 }

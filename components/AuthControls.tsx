@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { LogOut, User } from "lucide-react";
 import { useApp } from "@/lib/WizardContext";
 
-export function AuthControls() {
+export function AuthControls({ loginInputs }: { loginInputs?: React.ReactNode }) {
   const {
     authError,
     authReady,
@@ -64,6 +64,7 @@ export function AuthControls() {
           )}
         </div>
 
+        {!isSignedIn && loginInputs}
         {takingLong && <p role="status" className="text-xs text-destructive">認証または保存領域の応答を待っています。通信状態を確認してください。改善しない場合は他のタブを閉じ、この画面を再読み込みしてください。処理の重複を防ぐため、応答が返るまで再送信できません。</p>}
         {authError && (!authReady || isSignedIn) && <p role="alert" className="text-xs font-medium text-destructive">{authError}</p>}
         {!authReady && authError && <button type="button" onClick={() => window.location.reload()} className="min-h-12 rounded border border-input px-3 text-sm">再読み込みして再試行</button>}
