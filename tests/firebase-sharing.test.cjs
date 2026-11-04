@@ -237,7 +237,7 @@ test('login button opens the existing email form and duplicate submissions are b
   const refs = [];
   let stateIndex = 0, refIndex = 0, submissions = 0, finish;
   const app = {
-    authReady: true, authUser: null, authError: null, pendingIds: [],
+    state: { currentStep: 7 }, authReady: true, authUser: null, authError: null, pendingIds: [],
     loginWithEmail: () => { submissions++; return new Promise(resolve => { finish = resolve; }); }
   };
   const ui = load('components/AuthControls.tsx', {
@@ -248,7 +248,18 @@ test('login button opens the existing email form and duplicate submissions are b
       useRef: initial => { const i = refIndex++; return refs[i] ??= { current: initial }; }
     }
   });
-  const render = () => { stateIndex = refIndex = 0; return ui.AuthControls(); };
+  let showEmailForm = false;
+  const containerMocks = {
+    '@/lib/WizardContext': { useApp: () => app },
+    '@/lib/store': { PROJECT_LIST_STEP: 7 },
+    './AuthControls': ui,
+    react: { ...React, useState: () => [showEmailForm, value => { showEmailForm = typeof value === 'function' ? value(showEmailForm) : value; }] }
+  };
+  for (const [, name, path] of fs.readFileSync('components/WizardContainer.tsx', 'utf8').matchAll(/import \{ (\w+) \} from "([^"]+)";/g)) {
+    if (!(path in containerMocks) && path !== 'react') containerMocks[path] = { [name]: () => null };
+  }
+  const container = load('components/WizardContainer.tsx', containerMocks);
+  const render = () => { stateIndex = refIndex = 0; return ui.AuthControls({ showEmailForm }); };
   function nodes(node) {
     if (!node || typeof node !== 'object') return [];
     if (Array.isArray(node)) return node.flatMap(nodes);
@@ -257,9 +268,10 @@ test('login button opens the existing email form and duplicate submissions are b
   const initial = nodes(render());
   assert.equal(initial.some(node => node.type === 'form'), false);
   assert.equal(initial.some(node => node.props?.children === 'Googleログイン'), false);
-  const trigger = initial.find(node => node.type === 'button' && node.props['aria-controls'] === 'email-login-form');
+  assert.equal(initial.some(node => node.type === 'button' && node.props['aria-controls'] === 'email-login-form'), false);
+  const trigger = nodes(container.WizardContainer()).find(node => node.type === 'button' && node.props['aria-controls'] === 'email-login-form');
   assert.equal(trigger.props.children, 'ログイン');
-  assert.match(trigger.props.className, /min-h-12/);
+  assert.match(trigger.props.className, /h-\[60px\] w-\[280px\] max-w-full/);
   trigger.props.onClick();
   const opened = nodes(render());
   opened.find(node => node.type === 'input' && node.props.type === 'email').props.onChange({ target: { value: 'staff@example.test' } });

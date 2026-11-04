@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { LogOut, User } from "lucide-react";
 import { useApp } from "@/lib/WizardContext";
 
-export function AuthControls() {
+export function AuthControls({ showEmailForm }: { showEmailForm: boolean }) {
   const {
     authError,
     authReady,
@@ -14,7 +14,6 @@ export function AuthControls() {
     registerWithEmail,
     memberActive, syncError, fromCache, pendingIds, retrySync,
   } = useApp();
-  const [showEmailForm, setShowEmailForm] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -56,7 +55,7 @@ export function AuthControls() {
             </span>
           </div>
 
-          {isSignedIn ? (
+          {isSignedIn && (
             <button
               type="button"
               onClick={() => handleAuthAction(logout)}
@@ -66,18 +65,6 @@ export function AuthControls() {
               <LogOut className="h-4 w-4" aria-hidden="true" />
               ログアウト
             </button>
-          ) : (
-            <div className="flex shrink-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setShowEmailForm((value) => !value)}
-                className="inline-flex min-h-12 items-center justify-center rounded bg-primary px-5 text-base font-semibold text-primary-foreground hover:bg-primary/90"
-                aria-expanded={showEmailForm}
-                aria-controls="email-login-form"
-              >
-                ログイン
-              </button>
-            </div>
           )}
         </div>
 
