@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const ts = require('typescript');
 
 function load(path, mocks, globals = {}) {
+  mocks = { "./firebase-production-config.json": require("../lib/firebase-production-config.json"), ...mocks };
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(path, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true }

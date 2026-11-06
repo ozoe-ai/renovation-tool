@@ -1,3 +1,4 @@
+import productionConfig from "./firebase-production-config.json";
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import {
   browserLocalPersistence,
@@ -30,18 +31,27 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-export function isFirebaseConfigured(): boolean {
-  return Boolean(
-    firebaseConfig.apiKey &&
-      firebaseConfig.authDomain &&
-      firebaseConfig.projectId &&
-      firebaseConfig.appId
+function getFirebaseConfig() {
+  const required = [firebaseConfig.apiKey, firebaseConfig.authDomain, firebaseConfig.projectId, firebaseConfig.appId];
+  if (required.every(Boolean)) return firebaseConfig;
+
+  // These are public Firebase Web SDK identifiers for the existing production app.
+  // Use a complete configuration, never combine settings from different projects.
+  if (typeof window === "undefined" || window.location?.hostname !== "renovation-tool.vercel.app") return null;
+  const matchesProduction = Object.entries(firebaseConfig).every(([key, value]) =>
+    !value || value === productionConfig[key as keyof typeof productionConfig]
   );
+  return matchesProduction ? productionConfig : null;
+}
+
+export function isFirebaseConfigured(): boolean {
+  return getFirebaseConfig() !== null;
 }
 
 export function getFirebaseApp(): FirebaseApp | null {
-  if (!isFirebaseConfigured()) return null;
-  return getApps()[0] ?? initializeApp(firebaseConfig);
+  const config = getFirebaseConfig();
+  if (!config) return null;
+  return getApps()[0] ?? initializeApp(config);
 }
 
 export function getFirebaseAuth(): Auth | null {

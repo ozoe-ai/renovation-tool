@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const ts = require('typescript');
 function load(file, mocks = {}, globals = {}) {
+  mocks = { "./firebase-production-config.json": require("../lib/firebase-production-config.json"), ...mocks };
   const exports = {};
   const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true }
@@ -358,4 +359,31 @@ test('new projects inherit the chosen individual, further new projects retain it
   assert.deepEqual([...render().state.assigneeIds], ['legacy-a', 'legacy-b']);
   render().startNewProject();
   assert.deepEqual([...render().state.assigneeIds], ['go']);
+});
+
+test('first visit on the production host can initialize auth without build variables or storage', async () => {
+  const config = require('../lib/firebase-production-config.json');
+  const calls = [];
+  const window = { location: { hostname: 'renovation-tool.vercel.app' } };
+  Object.defineProperty(window, 'localStorage', { get() { throw new Error('blocked'); } });
+  const env = {};
+  const client = load('lib/firebase-client.ts', {
+    'firebase/app': { getApps: () => [], initializeApp: options => { assert.equal(options === config, true); return {}; } },
+    'firebase/auth': {
+      initializeAuth: () => ({}),
+      signInWithEmailAndPassword: async () => { calls.push('auth'); return { user: { uid: 'staff' } }; }
+    },
+    'firebase/firestore': {}
+  }, { window, process: { env } });
+  assert.equal((await client.signInWithEmail('staff@example.test', 'fixture')).uid, 'staff');
+  assert.deepEqual(calls, ['auth']);
+  window.location.hostname = 'preview.example.test';
+  assert.equal(client.isFirebaseConfigured(), false);
+  window.location.hostname = 'renovation-tool.vercel.app';
+  // A partial config must not silently switch Firebase projects.
+  env.NEXT_PUBLIC_FIREBASE_PROJECT_ID = 'different-project';
+  const mismatched = load('lib/firebase-client.ts', {
+    'firebase/app': {}, 'firebase/auth': {}, 'firebase/firestore': {}
+  }, { window, process: { env } });
+  assert.equal(mismatched.isFirebaseConfigured(), false);
 });
