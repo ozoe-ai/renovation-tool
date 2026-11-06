@@ -149,7 +149,7 @@ test('authentication waits for restored session and never creates an anonymous u
   const auth = { currentUser: null, authStateReady: async () => { ready = true; auth.currentUser = { uid: 'restored', isAnonymous: false }; } };
   const client = load('lib/firebase-client.ts', {
     'firebase/app': { getApps: () => [{}] },
-    'firebase/auth': { getAuth: () => auth },
+    'firebase/auth': { initializeAuth: () => auth },
     'firebase/firestore': {}
   }, { process: { env: { NEXT_PUBLIC_FIREBASE_API_KEY: 'test', NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: 'test', NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'test', NEXT_PUBLIC_FIREBASE_APP_ID: 'test' } } });
   assert.equal((await client.getCurrentFirebaseUser()).uid, 'restored');
@@ -162,7 +162,7 @@ test('login explicitly persists the account locally before opening Google sign-i
   const auth = {};
   const client = load('lib/firebase-client.ts', {
     'firebase/app': { getApps: () => [{}] },
-    'firebase/auth': { getAuth: () => auth, browserLocalPersistence: 'local', GoogleAuthProvider: class {},
+    'firebase/auth': { initializeAuth: () => auth, browserLocalPersistence: 'local', GoogleAuthProvider: class {},
       setPersistence: async (_auth, type) => calls.push(type), signInWithPopup: async () => { calls.push('signin'); return { user: { uid: 'staff' } }; } },
     'firebase/firestore': {}
   }, { process: { env: { NEXT_PUBLIC_FIREBASE_API_KEY: 'test', NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: 'test', NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'test', NEXT_PUBLIC_FIREBASE_APP_ID: 'test' } } });
@@ -170,21 +170,28 @@ test('login explicitly persists the account locally before opening Google sign-i
   assert.deepEqual(calls, ['local','signin']);
 });
 
-function emailClient({ storageBlocked = false, persistenceBlocked = false, signInError = null } = {}) {
+function emailClient({ storageBlocked = false, persistenceBlocked = false, lateStorageFailure = false, signInError = null } = {}) {
   const calls = [];
   const data = new Map([['existing-draft', 'keep']]);
   const storage = {
     setItem: (key, value) => { if (storageBlocked) throw new Error('storage denied'); data.set(key, value); },
     getItem: key => data.get(key), removeItem: key => data.delete(key)
   };
+  let options;
+  const auth = { currentUser: null };
   const client = load('lib/firebase-client.ts', {
     'firebase/app': { getApps: () => [{}] },
     'firebase/auth': {
-      getAuth: () => ({}), browserLocalPersistence: 'local', indexedDBLocalPersistence: 'indexeddb',
+      initializeAuth: (_app, config) => { options = config; return auth; }, browserSessionPersistence: "session", inMemoryPersistence: "memory", browserLocalPersistence: 'local', indexedDBLocalPersistence: 'indexeddb',
       setPersistence: async (_auth, type) => { calls.push(type); if (persistenceBlocked) throw new Error('storage unavailable'); },
+      updateCurrentUser: async (_auth, user) => { calls.push("publish"); auth.currentUser = user; },
       signInWithEmailAndPassword: async (_auth, email, password) => {
         calls.push(['signin', email, password]);
         if (signInError) throw signInError;
+        if (lateStorageFailure) {
+          auth.currentUser = { uid: "existing-staff" };
+          throw Object.assign(new Error("sensitive detail"), { name: "QuotaExceededError" });
+        }
         return { user: { uid: 'existing-staff' } };
       }
     }, 'firebase/firestore': {}
@@ -192,30 +199,23 @@ function emailClient({ storageBlocked = false, persistenceBlocked = false, signI
     NEXT_PUBLIC_FIREBASE_API_KEY: 'test', NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: 'test',
     NEXT_PUBLIC_FIREBASE_PROJECT_ID: 'test', NEXT_PUBLIC_FIREBASE_APP_ID: 'test'
   } } });
-  return { client, calls, data };
+  return { client, calls, data, getOptions: () => options };
 }
 
-test('email login uses existing credentials after durable persistence and preserves draft data', async () => {
-  const { client, calls, data } = emailClient();
+test('blocked localStorage does not prevent email authentication', async () => {
+  const { client, calls, data, getOptions } = emailClient({ storageBlocked: true, persistenceBlocked: true });
   assert.equal((await client.signInWithEmail('staff@example.test', 'secret')).uid, 'existing-staff');
-  assert.deepEqual(calls, ['local', ['signin', 'staff@example.test', 'secret']]);
+  assert.deepEqual(calls, [['signin', 'staff@example.test', 'secret']]);
   assert.deepEqual([...data], [['existing-draft', 'keep']]);
+  assert.deepEqual([...getOptions().persistence], ['indexeddb', 'local', 'session', 'memory']);
 });
 
-test('blocked localStorage falls back to IndexedDB before email authentication', async () => {
-  const { client, calls } = emailClient({ storageBlocked: true });
-  await client.signInWithEmail('staff@example.test', 'secret');
-  assert.deepEqual(calls, ['indexeddb', ['signin', 'staff@example.test', 'secret']]);
-});
-
-test('persistence failure prevents credential submission and explains recovery', async () => {
-  const { client, calls } = emailClient({ persistenceBlocked: true });
-  await assert.rejects(client.signInWithEmail('staff@example.test', 'secret'), error => {
-    assert.equal(error.code, 'auth/persistence-unavailable');
-    assert.match(client.describeAuthError(error), /空き容量/);
-    return true;
-  });
-  assert.deepEqual(calls, ['local', 'indexeddb']);
+test('a failed session write after authentication falls back without submitting credentials twice', async () => {
+  const { client, calls } = emailClient({ lateStorageFailure: true });
+  assert.equal((await client.signInWithEmail('staff@example.test', 'secret')).uid, 'existing-staff');
+  assert.deepEqual(calls, [['signin', 'staff@example.test', 'secret'], 'memory', 'publish']);
+  assert.match(client.describeAuthError({ name: 'QuotaExceededError', message: 'sensitive detail' }), /auth\/storage-failed/);
+  assert.doesNotMatch(client.describeAuthError(new Error('sensitive detail')), /sensitive detail/);
 });
 
 test('credential and network failures propagate, explain the stage, and permit retry', async () => {

@@ -113,14 +113,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const flushing = React.useRef(false);
   const flushRequested = React.useRef(false);
 
-  const persist = useCallback((cache: SharedCache) => {
+  const persist = useCallback((cache: SharedCache, allowMemory = false) => {
     const uid = uidRef.current;
     if (!uid) return;
-    writeSharedCache(uid, cache);
+    let storageFailed = false;
+    try { writeSharedCache(uid, cache); } catch (error) {
+      if (!allowMemory) throw error;
+      storageFailed = true;
+    }
     cacheRef.current = cache;
     setProjects(overlayPending(cache));
     setStaff(cache.staff);
     setPendingIds(Object.keys(cache.pending));
+    if (storageFailed) setSyncError("端末に共有データを保存できません。通信中は閲覧できます。（data/storage-unavailable）");
   }, []);
   const retrySync = useCallback(() => { setSyncError(null); setRevision(v => v + 1); setLockRevision(v => v + 1); }, []);
 
@@ -240,11 +245,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setFromCache(cached);
         // An empty initial cache must not erase a previously stored offline list.
         if (cached && projects.length === 0) return;
-        try { persist({ ...cacheRef.current, projects }); } catch { setSyncError("端末内の保存容量を確認してください。"); }
+        try { persist({ ...cacheRef.current, projects }, true); } catch { setSyncError("端末内の保存容量を確認してください。"); }
       }, failed));
       stops.push(projectRepository.watchStaff((staff) => {
         if (uidRef.current !== uid) return;
-        try { persist({ ...cacheRef.current, staff }); } catch { setSyncError("担当者情報を端末へ保存できませんでした。"); }
+        try { persist({ ...cacheRef.current, staff }, true); } catch { setSyncError("担当者情報を端末へ保存できませんでした。"); }
       }, failed));
     } catch { failed(); }
     return () => stops.forEach(stop => stop());
@@ -447,7 +452,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await signInWithGoogle();
     } catch (error) {
-      console.error("Failed to sign in with Google", error);
+      console.error("[auth]", describeAuthError(error));
       setAuthError("Googleログインに失敗しました。Firebase ConsoleでGoogleプロバイダが有効か確認してください。");
     }
   }, []);
@@ -460,7 +465,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setState(s => ({ ...s, currentStep: store.PROJECT_LIST_STEP }));
     } catch (error) {
       showProjectsAfterLogin.current = false;
-      console.error("Failed to sign in with email", error);
+      console.error("[auth]", describeAuthError(error));
       setAuthError(describeAuthError(error));
     }
   }, []);
@@ -470,7 +475,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await createAccountWithEmail(email, password);
     } catch (error) {
-      console.error("Failed to create email account", error);
+      console.error("[auth]", describeAuthError(error));
       setAuthError(describeAuthError(error));
     }
   }, []);
@@ -481,7 +486,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       await signOutFromFirebase();
       setAuthUser(null);
     } catch (error) {
-      console.error("Failed to sign out", error);
+      console.error("[auth]", describeAuthError(error));
       setAuthError("ログアウトに失敗しました。");
     }
   }, []);

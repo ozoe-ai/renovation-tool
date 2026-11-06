@@ -1,6 +1,11 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import {
   browserLocalPersistence,
+  browserSessionPersistence,
+  browserPopupRedirectResolver,
+  inMemoryPersistence,
+  initializeAuth,
+  updateCurrentUser,
   indexedDBLocalPersistence,
   createUserWithEmailAndPassword,
   getAuth,
@@ -41,7 +46,16 @@ export function getFirebaseApp(): FirebaseApp | null {
 
 export function getFirebaseAuth(): Auth | null {
   const app = getFirebaseApp();
-  return app ? getAuth(app) : null;
+  if (!app) return null;
+  try {
+    return initializeAuth(app, {
+      persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence],
+      popupRedirectResolver: browserPopupRedirectResolver,
+    });
+  } catch (error) {
+    if (getAuthErrorCode(error) === "auth/already-initialized") return getAuth(app);
+    throw error;
+  }
 }
 
 let firestore: Firestore | null = null;
@@ -76,47 +90,44 @@ export function onFirebaseUserChanged(callback: (user: User | null) => void, onE
   return () => { active = false; stop(); };
 }
 
-// Keep durable sessions; never silently fall back to an in-memory login.
-async function prepareEmailPersistence(auth: Auth): Promise<void> {
-  try {
-    // setPersistence alone does not test writing when there is no current user.
-    const key = `auth-storage-probe:${Date.now()}:${Math.random()}`;
-    try {
-      window.localStorage.setItem(key, key);
-      if (window.localStorage.getItem(key) !== key) throw new Error("Storage write failed");
-    } finally {
-      window.localStorage.removeItem(key);
-    }
-    await setPersistence(auth, browserLocalPersistence);
-  } catch {
-    try {
-      await setPersistence(auth, indexedDBLocalPersistence);
-    } catch {
-      throw Object.assign(new Error("ログイン状態を端末に保存できません。空き容量を確認し、同じサイトの他のタブを閉じて再試行してください。改善しない場合は管理者へ連絡してください。ブラウザのデータは削除しないでください。"), { code: "auth/persistence-unavailable" });
-    }
-  }
+function getAuthErrorCode(error: unknown): string {
+  if (typeof error !== "object" || error === null || !("code" in error)) return "";
+  return typeof error.code === "string" && /^auth\/[a-z0-9-]+$/.test(error.code) ? error.code : "";
+}
+
+function isStorageError(error: unknown): boolean {
+  if (getAuthErrorCode(error) === "auth/web-storage-unsupported") return true;
+  if (typeof error !== "object" || error === null || !("name" in error)) return false;
+  return ["QuotaExceededError", "SecurityError", "InvalidStateError", "NotAllowedError", "AbortError", "UnknownError"].includes(String(error.name));
 }
 
 export function describeAuthError(error: unknown): string {
-  const code = typeof error === "object" && error !== null && "code" in error ? String(error.code) : "";
+  const code = getAuthErrorCode(error) || (isStorageError(error) ? "auth/storage-failed" : "auth/unexpected-error");
+  let message: string;
   switch (code) {
-    case "auth/persistence-unavailable": return (error as Error).message;
+    case "auth/storage-failed":
+    case "auth/persistence-unavailable":
+    case "auth/web-storage-unsupported": message = "ログイン状態の保存に失敗しました。通常のブラウザで開いて再試行してください。"; break;
+    case "auth/configuration-missing":
+    case "auth/invalid-api-key":
+    case "auth/app-not-authorized":
+    case "auth/unauthorized-domain":
+    case "auth/operation-not-allowed": message = "認証設定を確認できません。管理者へお問い合わせください。"; break;
     case "auth/invalid-credential":
     case "auth/wrong-password":
     case "auth/user-not-found":
-    case "auth/invalid-email": return "メールアドレスまたはパスワードを確認して再試行してください。";
-    case "auth/network-request-failed": return "認証サーバーに接続できません。通信状態を確認して再試行してください。";
-    case "auth/too-many-requests": return "試行回数が多いため一時的に制限されています。時間をおいて再試行してください。";
-    case "auth/user-disabled": return "このアカウントは無効です。管理者へお問い合わせください。";
-    case "auth/web-storage-unsupported": return "ブラウザの保存領域を利用できません。空き容量を確認し、管理者へお問い合わせください。";
-    case "auth/internal-error": return "認証またはログイン状態の保存に失敗しました。同じサイトの他のタブを閉じて再試行し、改善しない場合は管理者へ連絡してください。（auth/internal-error）";
-    default: return `認証処理に失敗しました。再試行し、改善しない場合は管理者へ連絡してください。（${code || "詳細不明"}）`;
+    case "auth/invalid-email": message = "メールアドレスまたはパスワードを確認して再試行してください。"; break;
+    case "auth/network-request-failed": message = "認証サーバーに接続できません。通信状態を確認して再試行してください。"; break;
+    case "auth/too-many-requests": message = "試行回数が多いため一時的に制限されています。時間をおいて再試行してください。"; break;
+    case "auth/user-disabled": message = "このアカウントは無効です。管理者へお問い合わせください。"; break;
+    default: message = "認証処理に失敗しました。再試行し、改善しない場合は管理者へ連絡してください。";
   }
+  return message + "（" + code + "）";
 }
 
 export async function signInWithGoogle(): Promise<User | null> {
   const auth = getFirebaseAuth();
-  if (!auth) throw new Error("Firebase設定がありません。");
+  if (!auth) throw Object.assign(new Error("Firebase設定がありません。"), { code: "auth/configuration-missing" });
   await setPersistence(auth, browserLocalPersistence);
   const credential = await signInWithPopup(auth, new GoogleAuthProvider());
   return credential.user;
@@ -124,16 +135,24 @@ export async function signInWithGoogle(): Promise<User | null> {
 
 export async function signInWithEmail(email: string, password: string): Promise<User | null> {
   const auth = getFirebaseAuth();
-  if (!auth) throw new Error("Firebase設定がありません。");
-  await prepareEmailPersistence(auth);
-  const credential = await signInWithEmailAndPassword(auth, email, password);
-  return credential.user;
+  if (!auth) throw Object.assign(new Error("Firebase設定がありません。"), { code: "auth/configuration-missing" });
+  const previousUser = auth.currentUser;
+  try {
+    return (await signInWithEmailAndPassword(auth, email, password)).user;
+  } catch (error) {
+    // The SDK assigns currentUser before writing it to persistence.
+    // Recover only a newly authenticated user and never retry credentials.
+    const user = auth.currentUser;
+    if (!isStorageError(error) || !user || user === previousUser) throw error;
+    await setPersistence(auth, inMemoryPersistence);
+    await updateCurrentUser(auth, user);
+    return user;
+  }
 }
 
 export async function createAccountWithEmail(email: string, password: string): Promise<User | null> {
   const auth = getFirebaseAuth();
-  if (!auth) throw new Error("Firebase設定がありません。");
-  await prepareEmailPersistence(auth);
+  if (!auth) throw Object.assign(new Error("Firebase設定がありません。"), { code: "auth/configuration-missing" });
   const credential = await createUserWithEmailAndPassword(auth, email, password);
   return credential.user;
 }
