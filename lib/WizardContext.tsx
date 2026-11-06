@@ -39,6 +39,7 @@ interface AppContextType {
   authError: string | null;
   staff: StaffMember[];
   memberActive: boolean;
+  canEdit: boolean;
   syncError: string | null;
   fromCache: boolean;
   pendingIds: string[];
@@ -98,9 +99,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [registeredActive, setMemberActive] = useState(false);
-  const [editLock, setEditLock] = useState<"waiting" | "available" | "blocked">("waiting");
+  const [editLock, setEditLock] = useState<"waiting" | "available" | "blocked" | "unavailable">("waiting");
   const [lockRevision, setLockRevision] = useState(0);
-  const memberActive = registeredActive && editLock === "available";
+  const memberActive = registeredActive;
+  const canEdit = memberActive && editLock === "available";
   const [syncError, setSyncError] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(true);
   const [pendingIds, setPendingIds] = useState<string[]>([]);
@@ -113,11 +115,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const flushing = React.useRef(false);
   const flushRequested = React.useRef(false);
 
-  const persist = useCallback((cache: SharedCache, allowMemory = false) => {
+  const persist = useCallback((cache: SharedCache, allowMemory = false, memoryOnly = false) => {
     const uid = uidRef.current;
     if (!uid) return;
     let storageFailed = false;
-    try { writeSharedCache(uid, cache); } catch (error) {
+    try { if (!memoryOnly) writeSharedCache(uid, cache); } catch (error) {
       if (!allowMemory) throw error;
       storageFailed = true;
     }
@@ -185,7 +187,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let release = () => {};
     const held = new Promise<void>(resolve => { release = resolve; });
     setEditLock("waiting");
-    navigator.locks.request(`estimate-editor:${authUser.uid}`, { ifAvailable: true }, async lock => {
+    void Promise.resolve().then(() => navigator.locks.request(`estimate-editor:${authUser.uid}`, { ifAvailable: true }, async lock => {
       if (cancelled) return;
       if (!lock) { setEditLock("blocked"); return; }
       // A previously active tab may have saved offline work while this tab waited.
@@ -203,7 +205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : id ? cache.pending[id]?.baseUpdatedAt ?? cache.projects.find(p => p.id === id)?.updatedAt ?? null : null;
       setEditLock("available");
       await held;
-    }).catch(() => { if (!cancelled) setEditLock("blocked"); });
+    })).catch(() => { if (!cancelled) setEditLock("unavailable"); });
     return () => { cancelled = true; release(); };
   }, [authUser, lockRevision]);
 
@@ -245,21 +247,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setFromCache(cached);
         // An empty initial cache must not erase a previously stored offline list.
         if (cached && projects.length === 0) return;
-        try { persist({ ...cacheRef.current, projects }, true); } catch { setSyncError("端末内の保存容量を確認してください。"); }
+        try { persist({ ...cacheRef.current, projects }, true, !canEdit); } catch { setSyncError("端末内の保存容量を確認してください。"); }
       }, failed));
       stops.push(projectRepository.watchStaff((staff) => {
         if (uidRef.current !== uid) return;
-        try { persist({ ...cacheRef.current, staff }, true); } catch { setSyncError("担当者情報を端末へ保存できませんでした。"); }
+        try { persist({ ...cacheRef.current, staff }, true, !canEdit); } catch { setSyncError("担当者情報を端末へ保存できませんでした。"); }
       }, failed));
     } catch { failed(); }
     return () => stops.forEach(stop => stop());
-  }, [authUser, memberActive, persist, revision]);
+  }, [authUser, memberActive, canEdit, persist, revision]);
 
   useEffect(() => {
-    if (!hydrated || !authUser || !memberActive) return;
+    if (!hydrated || !authUser || !canEdit) return;
     try { persist({ ...cacheRef.current, draft: state, draftBaseUpdatedAt: baseRef.current }); }
     catch { setSyncError("編集内容を端末へ保存できませんでした。ブラウザの保存容量を確認してください。"); }
-  }, [state, hydrated, authUser, memberActive, persist]);
+  }, [state, hydrated, authUser, canEdit, persist]);
 
   useEffect(() => {
     const online = () => setRevision(v => v + 1);
@@ -268,7 +270,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   useEffect(() => {
-    if (!authUser || !memberActive || !navigator.onLine) return;
+    if (!authUser || !canEdit || !navigator.onLine) return;
     if (flushing.current) { flushRequested.current = true; return; }
     const uid = authUser.uid;
     flushing.current = true;
@@ -297,7 +299,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       flushing.current = false;
       if (flushRequested.current) { flushRequested.current = false; setRevision(v => v + 1); }
     });
-  }, [authUser, memberActive, revision, persist]);
+  }, [authUser, canEdit, revision, persist]);
 
   const setAssigneeIds = useCallback((ids: string[]) => setState(s => ({ ...s, assigneeIds: ids })), []);
   const discardPending = useCallback((id: string) => {
@@ -381,6 +383,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const saveProject = useCallback(async (status: ProjectStatus, stateOverride?: AppState, options?: { requireRemote?: boolean }) => {
     if (!authUser || !memberActive) throw new Error("有効な社内アカウントでログインしてください。");
+    if (!canEdit) throw new Error("このタブでは案件を編集できません。");
     const cache = cacheRef.current;
     const input = stateOverride ?? state;
     const id = input.activeProjectId ?? `project-${crypto.randomUUID()}`;
@@ -414,7 +417,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         throw new Error("案件の共有サーバー保存に失敗しました。入力内容と見積ファイルは保持されています。同じ内容で再試行してください。");
       }
     }
-  }, [state, authUser, memberActive, persist]);
+  }, [state, authUser, memberActive, canEdit, persist]);
 
   const loadProject = useCallback((projectId: string) => {
     const project = overlayPending(cacheRef.current).find(p => p.id === projectId);
@@ -518,11 +521,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       value={{
         state,
         projects,
-        staff, memberActive, syncError, fromCache, pendingIds, retrySync, discardPending, setAssigneeIds,
+        staff, memberActive, canEdit, syncError, fromCache, pendingIds, retrySync, discardPending, setAssigneeIds,
         hasUnsavedChanges,
         authUser,
         authReady,
-        authError: editLock === "blocked" ? "別のタブでこのアカウントの案件を開いています。そのタブを閉じて「再確認」を押してください。" : authError,
+        authError,
         setStep,
         setProjectName,
         setCustomerName,

@@ -17,7 +17,7 @@ import { AuthControls } from "./AuthControls";
 import { EmailLoginForm, type EmailLoginControls } from "./EmailLoginForm";
 
 export function WizardContainer() {
-  const { state, authReady, authUser, memberActive, retrySync } = useApp();
+  const { state, authReady, authUser, memberActive, canEdit, retrySync } = useApp();
 
   const screens = [
     <InitialInfoScreen key="initial-info" />,      // step 0
@@ -39,7 +39,13 @@ export function WizardContainer() {
         {login?.button}
         {login?.feedback}
         {authUser && <><p className="text-xs break-all">登録用UID: {authUser.uid}</p><button type="button" onClick={retrySync} className="rounded border px-3 py-2">再確認</button></>}
-      </div> : <>
+      </div> : !canEdit ? <>
+        <div role="status" className="mx-auto max-w-3xl px-6 pt-4 text-sm text-muted-foreground">
+          案件一覧は閲覧できます。編集できない場合は同じブラウザの他のタブを閉じて再確認してください。
+          <button type="button" onClick={retrySync} className="ml-2 underline">再確認</button>
+        </div>
+        <ProjectListScreen readOnly />
+      </> : <>
       <ProjectActionsBar />
       {screens[state.currentStep] ?? <InitialInfoScreen />}
       {state.currentStep !== PROJECT_LIST_STEP && <BottomTabs />}

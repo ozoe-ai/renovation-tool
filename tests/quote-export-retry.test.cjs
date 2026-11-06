@@ -259,6 +259,7 @@ test('email authentication lands on the project list even when the editor lock r
   const React = require('react');
   const states = [], refs = [], effects = [];
   let index = 0, refIndex = 0, effectIndex = 0, observer;
+  let lock = {};
   const blank = () => ({ currentStep: 7, selectedWorkItems: [], assigneeIds: [] });
   const cache = { projects: [], staff: [], pending: {}, draft: { ...blank(), currentStep: 6, projectName: 'keep-draft', activeProjectId: 'p1' } };
   const context = load('lib/WizardContext.tsx', {
@@ -266,19 +267,32 @@ test('email authentication lands on the project list even when the editor lock r
       useState: initial => { const i = index++; if (!(i in states)) states[i] = initial; return [states[i], v => { states[i] = typeof v === 'function' ? v(states[i]) : v; }]; },
       useRef: initial => { const i = refIndex++; return refs[i] ??= { current: initial }; }
     },
-    './store': { initialState: blank, isBlankEstimate: () => false, PROJECT_LIST_STEP: 7 }, './project-repository': {},
+    './store': { initialState: blank, isBlankEstimate: () => false, PROJECT_LIST_STEP: 7 },
+    './project-repository': { watchMembership: (_uid, next) => { next({ active: true }, false); return () => {}; } },
     './shared-project-cache': { readSharedCache: () => cache, overlayPending: value => value.projects },
     './firebase-client': {
       onFirebaseUserChanged: fn => { observer = fn; fn(null); return () => {}; },
       signInWithEmail: async () => observer({ uid: 'staff', email: 'example@invalid.test', isAnonymous: false })
     }
-  }, { window: { setTimeout: () => 1, clearTimeout: () => {} }, navigator: { locks: { request: (_name, _options, fn) => fn({}) } } });
+  }, { window: { setTimeout: () => 1, clearTimeout: () => {} }, navigator: { locks: { request: (_name, _options, fn) => fn(lock) } } });
   const render = () => { index = refIndex = effectIndex = 0; return context.AppProvider({ children: null }).props.value; };
   render(); const stopObserver = effects[0]();
   await render().loginWithEmail('example@invalid.test', 'unused');
   assert.equal(render().state.currentStep, 7);
   const releaseLock = effects[1]();
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(render().state.currentStep, 7);
   assert.equal(render().state.projectName, 'keep-draft');
-  releaseLock(); stopObserver();
+  releaseLock();
+  lock = null;
+  const stopMembership = effects[2]();
+  const stopBlockedLock = effects[1]();
+  await new Promise(resolve => setImmediate(resolve));
+  const blocked = render();
+  assert.equal(blocked.authUser.uid, "staff");
+  assert.equal(blocked.memberActive, true);
+  assert.equal(blocked.canEdit, false);
+  assert.equal(blocked.authError, null);
+  await assert.rejects(blocked.saveProject("draft"), /編集できません/);
+  stopBlockedLock(); stopMembership(); stopObserver();
 });

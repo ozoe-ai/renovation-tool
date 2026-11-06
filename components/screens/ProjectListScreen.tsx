@@ -21,7 +21,7 @@ function formatDateTime(value: string) {
   });
 }
 
-export function ProjectListScreen() {
+export function ProjectListScreen({ readOnly = false }: { readOnly?: boolean } = {}) {
   const { hasUnsavedChanges, loadProject, projects, startNewProject, staff, pendingIds, discardPending } = useApp();
   const [search, setSearch] = React.useState("");
   const [department, setDepartment] = React.useState<StaffDepartment | "all">("all");
@@ -64,6 +64,7 @@ export function ProjectListScreen() {
           </div>
           <button
             type="button"
+            disabled={readOnly}
             onClick={handleNewProject}
             className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
           >
@@ -100,6 +101,7 @@ export function ProjectListScreen() {
             <p className="text-sm text-muted-foreground">保存済み案件はありません。</p>
             <button
               type="button"
+              disabled={readOnly}
               onClick={handleNewProject}
               className="px-4 py-2 rounded-lg border border-input text-foreground text-sm font-medium hover:bg-accent transition-colors"
             >
@@ -113,6 +115,7 @@ export function ProjectListScreen() {
               <button
                 key={project.id}
                 type="button"
+                disabled={readOnly}
                 onClick={() => handleLoadProject(project.id)}
                 className="w-full rounded-lg border border-border p-4 text-left hover:bg-accent/50 transition-colors"
               >
@@ -128,7 +131,7 @@ export function ProjectListScreen() {
                   </span>
                 </div>
               </button>
-              {pendingIds.includes(project.id) && <button type="button" className="px-4 pb-3 text-xs underline text-muted-foreground" onClick={() => {
+              {!readOnly && pendingIds.includes(project.id) && <button type="button" className="px-4 pb-3 text-xs underline text-muted-foreground" onClick={() => {
                 if (window.confirm("この案件の端末内の未同期保存を破棄して、取得済みの共有版へ戻します。編集内容は失われます。よろしいですか？")) discardPending(project.id);
               }}>未同期保存を破棄して共有版へ戻す</button>}
               </div>
